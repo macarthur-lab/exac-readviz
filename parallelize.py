@@ -1,14 +1,14 @@
 """
-This script takes the name of another python script (let's say some_script.py) 
-and launches N parallel instances of some_script.py on the short queue by means
-of an array job. Each instance of some_script.py will get passed
- --chrom, --start, and --end args which will define the genomic 
-region it should operate on. This region should be small enough for 
-some_script.py to finish in < 4 hours (the short queue's runtime limit) in the 
-worst case. It's up to some_script.py to avoid redoing the same work if 
+This script takes the name of another python script (let's say some_script.py)
+and launches N parallel instances of some_script.py on the short queue as an
+array job. Each instance of some_script.py will get passed
+ --chrom, --start, and --end args which will define the genomic
+region it should operate on. This region should be small enough for
+some_script.py to finish in < 4 hours (the short queue's runtime limit) in the
+worst case. It's up to some_script.py to avoid redoing the same work if
 it is run multiple times on the same genomic interval (eg. if the 1st run fails).
 
-some_script.py should return 0 if it completed successfully, and not 0 otherwise.
+some_script.py should return 0 if it completed successfully, or not 0 otherwise.
 """
 
 import argparse
@@ -23,7 +23,7 @@ class ParallelIntervals(peewee.Model):
     chrom = peewee.CharField(max_length=5, null=False)
     start_pos = peewee.IntegerField(null=False)
     end_pos = peewee.IntegerField(null=False)
-    current_pos = peewee.IntegerField(default=0)  # not currently used
+    #current_pos = peewee.IntegerField(default=0)  # not currently used because some_script.py has no way of feeding back this info
 
     job_id = peewee.IntegerField(default=0)  # job that is processing this interval
     finished_successfully = peewee.BooleanField(default=False)
@@ -51,30 +51,33 @@ indexes = (
 
 
 
-# if this instance of parallelize.py is already running as one of many array 
-# job tasks, launch some_script.py on the next interval
-
-is_array_job_task = os.getenv('SGE_TASK_ID', False)
+# if this instance of parallelize.py is already running as one of many array
+# job tasks, keep launching some_script.py on the next unprocessed interval
+is_array_job_task = os.getenv('SGE_TASK_ID', False)  # the actual task id number doesn't matter
 if is_array_job_task:
-    unique_job_id = random.random()
+    unique_job_id = random.random()  # don't use actual job id to avoid collisions in case parallel.py was restarted
     hostname = os.getenv('HOSTNAME')
     while True:
         stared_date = datetime.datetime.now()
-        interval_found = ParallelIntervals.update(
-            job_id=unique_job_id, 
-            started_date=started_date)
-        .where(
-            job_id==0)
-        .limit(1)
 
-        if not interval_found:
-            print("Finished with all intervals. Exiting..")
-            break
+        # get next interval
+        with db.atomic() as txn:
+            # claim an interval
+            interval_found = ParallelIntervals.update(
+                job_id=unique_job_id,
+                started_date=started_date)
+            .where(
+                job_id==0)
+            .limit(1)
 
-        interval_to_work_on_next = ParallelIntervals.get(
-            job_id == unique_job_id,
-            started_date == started_date)
-        
+            if not interval_found:
+                print("Finished all intervals. Exiting..")
+                break
+
+            interval_to_work_on_next = ParallelIntervals.get(
+                job_id == unique_job_id,
+                started_date == started_date)
+
         return_code = run("python " + script_name + i.chrom + i.start_pos + i.end_pos)
         if return_code == 0:
             interval_to_work_on_next.finished_successfully = 1
@@ -85,22 +88,18 @@ if is_array_job_task:
 else:
     # if this is being run for the first time, create all intervals
     db_utils.create_table(db, ParallelIntervals, indexes, safe=True)
-    
+
     for interval in intervals:
         row, created = ParallelIntervals.get_or_create(
             chrom=chrom, start_pos=start_pos, end_pos=end_pos)
 
         if created:
             # only set current_pos if the table didn't exist previously
-            row.current_pos = start_pos
+            #row.current_pos = start_pos
             row.save()
     # start array job with N jobs, running self
 
 
-
-
-# while is not done 
-# launch some_script.py with 
 
 
 p = argparse.ArugmentParser()
@@ -109,7 +108,6 @@ p.add_argument("-n", "--num-jobs", help="Number of array job tasks to launch")
 p.add_argument("command", help="The command to parallelize. The command must work with --chrom, --start, --end appended")
 
 # generate database of intervals
-script_name = "some_script.py"
 
 
 #p.add_argument("--chrom", help="Genomic region - chromosome")
@@ -119,9 +117,7 @@ script_name = "some_script.py"
 
 
 
-
-import os
-
+script_name = "some_script.py"
 interval_size_per_job =2*1000*1000 # bp
 
 def run(cmd):
