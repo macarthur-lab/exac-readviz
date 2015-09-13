@@ -1,5 +1,13 @@
 """
-Utility script for parsing the exac info table into memory.
+Utility module for parsing the exac info table into memory.
+
+After this module is imported, the following global vars can be used to access
+the data:
+
+ EXAC_SAMPLE_ID_TO_BAM_PATH
+ EXAC_SAMPLE_ID_TO_GVCF_PATH
+ EXAC_SAMPLE_ID_TO_INCLUDE_STATUS
+
 """
 
 import os
