@@ -1,14 +1,12 @@
 """
-This script parses the calling intervals file into a database table (if
+This module parses the calling intervals file into a database table (if
 this hasn't been done already). The table is indexed by (chrom, start, end).
 """
 import logging
 import os
 import peewee
 import sys
-
-# establish the database connection
-from utils.database import db, create_table
+import utils.database
 
 # utility functions
 def parse_exac_calling_intervals(exac_calling_intervals_path):
@@ -51,10 +49,14 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
 
     # print some stats
     for row in ExacCallingInterval.raw("select count(*) as n, min(end-start) as min_size, max(end-start) as max_size, avg(end-start) as avg_size from " + ExacCallingInterval.__name__.lower()):
-        logging.info("Loaded %s intervals (range: %s to %s, mean: %s) into %s" % (row.n, row.min_size, row.max_size, int(row.avg_size), db.database))
+        logging.info("Loaded %s intervals (range: %s to %s, mean: %s) into %s" % (row.n, row.min_size, row.max_size, int(row.avg_size), calling_intervals_db))
     logging.info("Done loading")
 
 
+
+
+calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
+calling_intervals_db.connect()
 
 # define database model for storing the calling intervals
 class ExacCallingInterval(peewee.Model):
@@ -63,21 +65,21 @@ class ExacCallingInterval(peewee.Model):
     end = peewee.IntegerField()
     strand = peewee.CharField(max_length=1)
     name = peewee.CharField(max_length=500)
-    
+
     class Meta:
-        database = db
+        database = calling_intervals_db
 
 indexes = (
     (('chrom', 'start', 'end'), True),  # True means unique index
 )
 
-
 # create the database table and indexes if they don't exist yet
-create_table(db, ExacCallingInterval, indexes, safe=True) 
+if not ExacCallingInterval.table_exists():
+    # parse the exac calling intervals file into a database table
+    EXAC_CALLING_INTERVALS_PATH = "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
+    assert os.path.isfile(EXAC_CALLING_INTERVALS_PATH), \
+        "Couldn't find: %s" % EXAC_CALLING_INTERVALS_PATH
 
-# parse the exac calling intervals file into 
-EXAC_CALLING_INTERVALS_PATH = "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
-assert os.path.isfile(EXAC_CALLING_INTERVALS_PATH), \
-    "Couldn't find: %s" % EXAC_CALLING_INTERVALS_PATH
+    utils.database.create_table(calling_intervals_db, ExacCallingInterval, indexes, safe=True)
 
-parse_exac_calling_intervals(EXAC_CALLING_INTERVALS_PATH)
+    parse_exac_calling_intervals(EXAC_CALLING_INTERVALS_PATH)
