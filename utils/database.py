@@ -5,11 +5,6 @@
 import logging
 import peewee
 
-db = peewee.MySQLDatabase('exac_readviz', user='root',
-                              host='dmz-exac-dev.broadinstitute.org', port=3307)
-db.connect()
-
-
 
 def create_table(db, model, indexes=tuple(), safe=True):
     """Utility method for creating a database table and indexes.
