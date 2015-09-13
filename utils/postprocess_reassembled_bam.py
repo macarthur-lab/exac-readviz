@@ -9,33 +9,42 @@ def postprocess_bam(input_bam_path, output_bam_path):
     """Copies the input_bam to the output_bam while discarding extraneous
     or sensitive information. Leaves only the minimum required header,
     obfuscates and downsizes read names, discards all tags (including read groups).
+
+    If the input bam doesn't have any reads, the output bam won't be written.
     """
 
-    # HaplotypeCaller adds 2 rows to the debug output bam which represent the 2
-    # assembled haplotypes. Use this counter for a sanity check that the 2 haplotypes do exist in the bam
+    # This counter is used as a sanity check that HC added at least one read
+    # representing the assembled haplotype (typically it adds 2*n such reads
+    # where n is the number of SNPs in the region).
     artificial_haplotype_counter = 0
 
     ibam = pysam.AlignmentFile(input_bam_path, "rb")
     obam = None
-    for r in ibam:  # iterate over the reads
+
+    # iterate over the reads
+    for r in ibam:
+        #if r.get_tag('RG') == "ArtificialHaplotype":  # this doesn't work with the old version of pysam installed on the cluster
+        if dict(r.tags).get('RG') == "ArtificialHaplotype":
+            artificial_haplotype_counter += 1
+            continue
+
+
+        # create the output bam file if necessary
         if obam is None:
             chrom_name = ibam.header['SQ'][r.reference_id]['SN']
             chrom_length = ibam.header['SQ'][r.reference_id]['LN']
+            # put a minimal header with only 1 chrom name
             header = {'HD': { 'VN': '1.4', 'SO': 'coordinate' },
                       'SQ': [{'SN': chrom_name, 'LN': chrom_length}],
                       'RG': [],
             }
             obam = pysam.AlignmentFile(output_bam_path, "wb", header=header)
         else:
+            # check that the current read's reference_id matches the original one
             current_chrom_name = ibam.header['SQ'][r.reference_id]['SN']
             assert current_chrom_name == chrom_name, \
                 "File %s contains reads from more than one chromosome: %s, %s" % (
                     input_bam_path, chrom_name, current_chrom_name)
-
-        #if r.get_tag('RG') == "ArtificialHaplotype":  # this doesn't work with the old version of pysam installed on the cluster
-        if dict(r.tags).get('RG') == "ArtificialHaplotype":
-            artificial_haplotype_counter += 1
-            continue
 
         # copy info from r to s
         s = pysam.AlignedSegment()
@@ -56,11 +65,14 @@ def postprocess_bam(input_bam_path, output_bam_path):
     if obam is not None:
         obam.close()
 
-        assert artificial_haplotype_counter > 0, "Expected HaplotypeCaller to add at least one record with RG == 'ArtificialHaplotype'. %(input_bam_path)s => %(output_bam_path)" % locals()
+        assert artificial_haplotype_counter > 0, \
+            "Expected HaplotypeCaller to add at least one record with " \
+            "RG == 'ArtificialHaplotype'. " \
+            "%(input_bam_path)s => %(output_bam_path)" % locals()
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser("Essentially minifies a .bam by discarding extra header fields and tags")
+    p = argparse.ArgumentParser("Takes an HC output bam and discards non-essential header fields and tags, obfuscates read names, etc.")
     p.add_argument("-i", "--input-bam", help=".bam output from HaplotypeCaller", required=True)
     p.add_argument("-o", "--output-bam", help="Postprocessed bam", required=True)
     args = p.parse_args()
