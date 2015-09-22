@@ -7,6 +7,11 @@ import os
 import peewee
 import sys
 
+calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root',
+    host='dmz-exac-dev.broadinstitute.org', port=3307)
+calling_intervals_db.connect()
+
+
 # utility functions
 def parse_exac_calling_intervals(exac_calling_intervals_path):
     """Parses the exac calling regions .intervals file into a database
@@ -32,6 +37,8 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
 
     # parse exac_calling_intervals_file into the database table
     with open(exac_calling_intervals_path) as f:
+        previous_chrom = None
+        previous_start_pos = None
         for line in f:
             # skip header
             if line.startswith("@"):
@@ -39,12 +46,30 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
 
             # parse fields: chrom, start_pos, end_pos, strand, target_name
             fields = line.strip("\n").split("\t")
+            chrom = fields[0].replace("chr", "")
+            start_pos, end_pos = map(int, fields[1:3])
+            strand, name = fields[3:5]
+
+            if previous_chrom != chrom:
+                # reset
+                previous_start_pos = start_pos
+                previous_chrom = chrom
+
+            # ensure intervals are in order by start-pos so that table's id can
+            # be used to retrieve next and previous intervals
+            assert previous_start_pos <= start_pos, \
+                "Intervals in %s are out of order: %s is before %s" % (
+                    exac_calling_intervals_path,
+                    (previous_chrom, previous_start_pos),
+                    (chrom, start_pos),
+                )
+
             ExacCallingInterval.get_or_create(
-                chrom=fields[0].replace("chr", ""),
-                start=fields[1],
-                end=fields[2],
-                strand=fields[3],
-                name=fields[4])
+                chrom=chrom,
+                start=start_pos,
+                end=end_pos,
+                strand=strand,
+                name=name)
 
     # print some stats
     for row in ExacCallingInterval.raw("select count(*) as n, min(end-start) as min_size, max(end-start) as max_size, avg(end-start) as avg_size from " + ExacCallingInterval.__name__.lower()):
@@ -52,28 +77,60 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
     logging.info("Done loading")
 
 
-def get_overlapping_calling_interval(chrom, pos):
-    """Returns the calling interval that contains the given chrom, pos
-    (1-based, inclusive)
+def _get_interval(chrom, pos):
+    """Utility method - returns the ExacCallingInterval object that overlaps the
+    given chrom, pos (1-based, inclusive)
     """
     intervals = list(
         ExacCallingInterval.select("chrom", "start", "end").where(
             chrom=chrom, start <= pos, end >= pos))
 
     if not intervals:
-        raise ValueError("No region overlaps variant %s-%s" % (chrom, pos))
+        raise ValueError("Variant %s:%s is not overlapped by any calling intervals" % (chrom, pos))
 
-
-    assert len(intervals) < 2, "Multiple regions overlap variant %s-%s: %s" % (
+    assert len(intervals) < 2, "Multiple calling intervals overlap variant %s:%s - %s" % (
         chrom, pos, intervals)
 
-    i = intervals[0]
+    return intervals[0]
+
+
+def get_overlapping_calling_interval(chrom, pos):
+    """Returns the (chrom, start end) for the calling interval that overlaps
+    the given chrom, pos (1-based, inclusive).
+    """
+    i = _get_interval(chrom, pos)
     return i.chrom, i.start, i.end
 
 
+def get_intervals_around(chrom, pos, n_left=1, n_right=1):
+    """Returns the calling interval that overlaps the given chrom: pos (1-based,
+    inclusive), and also up to n_left intervals to the left of this interval
+    (in order by chrom & start position), as well as up to n_right intervals
+    to the right of the interval. If the overlapping interval is at the very
+    beginning or very end of a chromosome, fewer than n_left or n_right intervals
+    may be included.
 
-calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
-calling_intervals_db.connect()
+    Args:
+      chrom: variant chrom
+      pos: variant pos
+      n_left: returned list will include this many intervals to the left of the
+        interval that overlaps the given variant
+      n_right: returned list will include this many intervals to the right of the
+        interval that overlaps the given variant
+
+    Return:
+       list of intervals represented as (chrom, start, stop) tuples
+    """
+    i = _get_interval(chrom, pos)
+    left_intervals = ExacCallingInterval.select("chrom", "start", "end").where(
+        chrom=chrom, id >= i._id - n_left, id < i._id)
+    right_intervals = ExacCallingInterval.select("chrom", "start", "end").where(
+        chrom=chrom, id > i._id, id < i._id + n_right)
+
+    return map(lambda x : x.chrom, x.start, x.end,
+        list(left_intervals) + [i] + list(right_intervals))
+
+
 
 # define database model for storing the calling intervals
 class ExacCallingInterval(peewee.Model):
@@ -85,10 +142,11 @@ class ExacCallingInterval(peewee.Model):
 
     class Meta:
         database = calling_intervals_db
+        primary_key = CompositeKey('chrom', 'start', 'end')
 
-indexes = (
-    (('chrom', 'start', 'end'), True),  # True means unique index
-)
+#indexes = (
+#    (('chrom', 'start', 'end'), True),  # True means unique index
+#)
 
 
 import configargparse
@@ -106,6 +164,6 @@ if not ExacCallingInterval.table_exists():
     assert os.path.isfile(args.exac_calling_intervals), \
         "Couldn't find: %s" % args.exac_calling_intervals
 
-    create_table(calling_intervals_db, ExacCallingInterval, indexes, safe=True)
+    create_table(calling_intervals_db, ExacCallingInterval, safe=True)
 
     parse_exac_calling_intervals(args.exac_calling_intervals)
