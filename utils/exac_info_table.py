@@ -42,7 +42,7 @@ import configargparse
 p = configargparse.getArgumentParser()
 p.add("--exac-info-table", help="Path of ExAC info table",
       default='/humgen/atgu1/fs03/lek/resources/ExAC/ExAC.r0.3_meta_Final.tsv')
-args = p.parse_args()
+args, unknown_args = p.parse_known_args()
 
 assert os.path.isfile(args.exac_info_table), \
     "Couldn't find exac info table: %s" % args.exac_info_table
