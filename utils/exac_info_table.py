@@ -37,13 +37,19 @@ def parse_exac_info_table(info_table_path):
     return sample_id_to_bam_path, sample_id_to_gvcf_path, sample_id_include_status
 
 
-EXAC_INFO_TABLE_PATH="/humgen/atgu1/fs03/lek/resources/ExAC/ExAC.r0.3_meta_Final.tsv"
+import configargparse
 
-assert os.path.isfile(EXAC_INFO_TABLE_PATH), "Couldn't find exac info table: %s" % EXAC_INFO_TABLE_PATH
+p = configargparse.getArgumentParser()
+p.add("--exac-info-table", help="Path of ExAC info table",
+      default='/humgen/atgu1/fs03/lek/resources/ExAC/ExAC.r0.3_meta_Final.tsv')
+args = p.parse_args()
+
+assert os.path.isfile(args.exac_info_table), \
+    "Couldn't find exac info table: %s" % args.exac_info_table
 
 (EXAC_SAMPLE_ID_TO_BAM_PATH,
  EXAC_SAMPLE_ID_TO_GVCF_PATH,
- EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(EXAC_INFO_TABLE_PATH)
+ EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(args.exac_info_table)
 
 
 assert len(EXAC_SAMPLE_ID_TO_BAM_PATH) == len(EXAC_SAMPLE_ID_TO_GVCF_PATH)
