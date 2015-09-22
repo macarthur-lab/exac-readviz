@@ -2,15 +2,19 @@
 This module parses the calling intervals file into a database table (if
 this hasn't been done already). The table is indexed by (chrom, start, end).
 """
+import itertools
 import logging
 import os
 import peewee
 import sys
 
-calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root',
-    host='dmz-exac-dev.broadinstitute.org', port=3307)
+calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
+#calling_intervals_db = peewee.MySQLDatabase('exac_readviz2', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307, autocommit=False)
+#calling_intervals_db = peewee.SqliteDatabase('exac_readviz.db', autocommit=False)
+#calling_intervals_db = peewee.SqliteDatabase(':memory:')
 calling_intervals_db.connect()
 
+#logging.getLogger('peewee').setLevel(logging.DEBUG)
 
 # utility functions
 def parse_exac_calling_intervals(exac_calling_intervals_path):
@@ -21,28 +25,37 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
     Args:
       exac_calling_intervals_path: A path like "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
     """
-    logging.info("Loading exac calling interals from %s" % exac_calling_intervals_path)
 
     # check if already done
     with open(exac_calling_intervals_path) as f:
         lines_in_file = sum(1 for line in f if not line.startswith("@"))
     records_in_db = ExacCallingInterval.select().count()
     if records_in_db > 0:
-        message = "%(records_in_db)d out of %(lines_in_file)d intervals from %(exac_calling_intervals_path)s are already in the database" % locals()
+        message = "%(records_in_db)d out of %(lines_in_file)d intervals were previously loaded from %(exac_calling_intervals_path)s" % locals()
         if lines_in_file == records_in_db:
-            logging.info("All " + message + ". Exiting...")
+            logging.info("All " + message)
             return
         else:
-            logging.info(message)
+            logging.info("Only " + message)
+    else:
+        logging.info("Loading exac calling intervals from %s" % exac_calling_intervals_path)
 
     # parse exac_calling_intervals_file into the database table
     with open(exac_calling_intervals_path) as f:
         previous_chrom = None
         previous_start_pos = None
+        line_counter = 0
+
+        #calling_intervals_db.begin()
         for line in f:
             # skip header
             if line.startswith("@"):
                 continue
+
+            line_counter += 1
+            if line_counter % 10000 == 0:
+                logging.info("%d lines processed" % line_counter)
+                #calling_intervals_db.commit()
 
             # parse fields: chrom, start_pos, end_pos, strand, target_name
             fields = line.strip("\n").split("\t")
@@ -70,6 +83,7 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
                 end=end_pos,
                 strand=strand,
                 name=name)
+    #calling_intervals_db.commit()
 
     # print some stats
     for row in ExacCallingInterval.raw("select count(*) as n, min(end-start) as min_size, max(end-start) as max_size, avg(end-start) as avg_size from " + ExacCallingInterval.__name__.lower()):
@@ -82,8 +96,8 @@ def _get_interval(chrom, pos):
     given chrom, pos (1-based, inclusive)
     """
     intervals = list(
-        ExacCallingInterval.select("chrom", "start", "end").where(
-            chrom=chrom, start <= pos, end >= pos))
+        ExacCallingInterval.select().where(
+            (ExacCallingInterval.chrom == chrom) & (ExacCallingInterval.start <= pos) & (ExacCallingInterval.end >= pos)))
 
     if not intervals:
         raise ValueError("Variant %s:%s is not overlapped by any calling intervals" % (chrom, pos))
@@ -102,7 +116,7 @@ def get_overlapping_calling_interval(chrom, pos):
     return i.chrom, i.start, i.end
 
 
-def get_intervals_around(chrom, pos, n_left=1, n_right=1):
+def get_adjacent_calling_intervals(chrom, pos, n_left=1, n_right=1):
     """Returns the calling interval that overlaps the given chrom: pos (1-based,
     inclusive), and also up to n_left intervals to the left of this interval
     (in order by chrom & start position), as well as up to n_right intervals
@@ -122,14 +136,16 @@ def get_intervals_around(chrom, pos, n_left=1, n_right=1):
        list of intervals represented as (chrom, start, stop) tuples
     """
     i = _get_interval(chrom, pos)
-    left_intervals = ExacCallingInterval.select("chrom", "start", "end").where(
-        chrom=chrom, id >= i._id - n_left, id < i._id)
-    right_intervals = ExacCallingInterval.select("chrom", "start", "end").where(
-        chrom=chrom, id > i._id, id < i._id + n_right)
+    left_intervals = ExacCallingInterval.select().where(
+        ExacCallingInterval.chrom == chrom,
+        ExacCallingInterval.id >= i.id - n_left,
+        ExacCallingInterval.id < i.id)
+    right_intervals = ExacCallingInterval.select().where(
+        ExacCallingInterval.chrom == chrom,
+        ExacCallingInterval.id > i.id,
+        ExacCallingInterval.id <= i.id + n_right)
 
-    return map(lambda x : x.chrom, x.start, x.end,
-        list(left_intervals) + [i] + list(right_intervals))
-
+    return [(x.chrom, x.start, x.end) for x in itertools.chain(left_intervals, [i], right_intervals)]
 
 
 # define database model for storing the calling intervals
@@ -142,11 +158,11 @@ class ExacCallingInterval(peewee.Model):
 
     class Meta:
         database = calling_intervals_db
-        primary_key = CompositeKey('chrom', 'start', 'end')
+        #primary_key = peewee.CompositeKey('chrom', 'start', 'end', 'strand', 'name')
 
-#indexes = (
-#    (('chrom', 'start', 'end'), True),  # True means unique index
-#)
+indexes = (
+    (('chrom', 'start', 'end', 'strand'), True),  # True means unique index
+)
 
 
 import configargparse
@@ -164,6 +180,9 @@ if not ExacCallingInterval.table_exists():
     assert os.path.isfile(args.exac_calling_intervals), \
         "Couldn't find: %s" % args.exac_calling_intervals
 
-    create_table(calling_intervals_db, ExacCallingInterval, safe=True)
+    create_table(calling_intervals_db, ExacCallingInterval, indexes, safe=True)
 
-    parse_exac_calling_intervals(args.exac_calling_intervals)
+logging.info("db: %s(%s), autocommit=%s" % (type(calling_intervals_db).__name__, calling_intervals_db.database, calling_intervals_db.get_autocommit()))
+logging.info("indexes: %s" % (calling_intervals_db.get_indexes("exaccallinginterval"),))
+
+parse_exac_calling_intervals(args.exac_calling_intervals)
