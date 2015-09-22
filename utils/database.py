@@ -23,7 +23,7 @@ def create_table(db, model, indexes=tuple(), safe=True):
     # create table as a compressed TokuDB table
     raw_query = db.compiler().create_table(model, safe=safe)
     raw_query = list(raw_query)
-    raw_query[0] = raw_query[0] + " engine=TokuDB, compression='tokudb_zlib', charset=latin1"
+    #raw_query[0] = raw_query[0] + " engine=TokuDB, compression='tokudb_zlib', charset=latin1"
     db.execute_sql(*raw_query)
     logging.debug(raw_query[0])
 
