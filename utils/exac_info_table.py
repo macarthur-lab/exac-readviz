@@ -10,6 +10,7 @@ the data:
 
 """
 
+import logging
 import os
 
 def parse_exac_info_table(info_table_path):
@@ -51,6 +52,15 @@ assert os.path.isfile(args.exac_info_table), \
  EXAC_SAMPLE_ID_TO_GVCF_PATH,
  EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(args.exac_info_table)
 
-
 assert len(EXAC_SAMPLE_ID_TO_BAM_PATH) == len(EXAC_SAMPLE_ID_TO_GVCF_PATH)
 assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
+
+n_total = len(EXAC_SAMPLE_ID_TO_BAM_PATH)
+n_include_true = sum(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.values())
+
+logging.info("Loaded %d rows from %s into EXAC_SAMPLE_ID_TO_BAM_PATH, "
+             "EXAC_SAMPLE_ID_TO_GVCF_PATH, EXAC_SAMPLE_ID_TO_INCLUDE_STATUS" % (
+    n_total, args.exac_info_table))
+
+logging.info("%d (%0.1f%%) of the samples have INCLUDE_STATUS = True" % (
+    n_include_true, n_include_true/float(n_total)))
