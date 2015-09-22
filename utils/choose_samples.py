@@ -13,14 +13,16 @@ def choose_samples(het_or_hom, alt_allele_index, genotypes, sample_id_include_st
 
     Args:
         het_or_hom: Either "het" or "hom" to indicate whether to choose het or hom-alt samples.
-        alt_allele_index: 1-based index of the alt allele that we're choosing samples for (bewteen 1 and n = total number of alt alleles at this site)
-        genotypes: a dictionary that maps each sample_id to a 4-tuple: (gt_ref, gt_alt, GQ, DP)
-            where gt_ref and gt_alt are integers between 0, and num alt alleles.
-        sample_id_include_status: dictionary mapping sample_id to either
+        alt_allele_index: 1-based index of the alt allele that we're choosing
+            samples for (bewteen 1 and n = total number of alt alleles at this site)
+        genotypes: a dictionary that maps each VCF sample_id to a 4-tuple: (gt_ref, gt_alt, GQ, DP)
+            where gt_ref and gt_alt are integers between 0 and num alt alleles.
+        sample_id_include_status: dictionary mapping each VCF sample_id to either
             True or False depending on the last column of the exac info table
 
     Return:
-        Iterator over sample ids.
+        Iterator over sample ids in order - with the ones that should
+        displayed first.
     """
     assert het_or_hom in ["het", "hom"], "Unexpected het_or_hom arg: %s" % het_or_hom
 
