@@ -6,13 +6,12 @@ import logging
 import os
 import peewee
 import sys
-import utils.database
 
 # utility functions
 def parse_exac_calling_intervals(exac_calling_intervals_path):
     """Parses the exac calling regions .intervals file into a database
-    'ExacCallingInterval' table that has columns: chrom, start_pos, end_pos, 
-    strand, target_name.
+    'ExacCallingInterval' table that has columns:
+        chrom, start_pos, end_pos, strand, target_name.
 
     Args:
       exac_calling_intervals_path: A path like "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
@@ -41,7 +40,7 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
             # parse fields: chrom, start_pos, end_pos, strand, target_name
             fields = line.strip("\n").split("\t")
             ExacCallingInterval.get_or_create(
-                chrom=fields[0],
+                chrom=fields[0].replace("chr", ""),
                 start=fields[1],
                 end=fields[2],
                 strand=fields[3],
@@ -53,6 +52,24 @@ def parse_exac_calling_intervals(exac_calling_intervals_path):
     logging.info("Done loading")
 
 
+def get_overlapping_calling_interval(chrom, pos):
+    """Returns the calling interval that contains the given chrom, pos
+    (1-based, inclusive)
+    """
+    intervals = list(
+        ExacCallingInterval.select("chrom", "start", "end").where(
+            chrom=chrom, start <= pos, end >= pos))
+
+    if not intervals:
+        raise ValueError("No region overlaps variant %s-%s" % (chrom, pos))
+
+
+    assert len(intervals) < 2, "Multiple regions overlap variant %s-%s: %s" % (
+        chrom, pos, intervals)
+
+    i = intervals[0]
+    return i.chrom, i.start, i.end
+
 
 
 calling_intervals_db = peewee.MySQLDatabase('exac_readviz', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
@@ -60,7 +77,7 @@ calling_intervals_db.connect()
 
 # define database model for storing the calling intervals
 class ExacCallingInterval(peewee.Model):
-    chrom = peewee.CharField(max_length=5, null=False, index=True)
+    chrom = peewee.CharField(max_length=5, null=False, index=True)  # without 'chr'
     start = peewee.IntegerField()
     end = peewee.IntegerField()
     strand = peewee.CharField(max_length=1)
@@ -73,13 +90,22 @@ indexes = (
     (('chrom', 'start', 'end'), True),  # True means unique index
 )
 
+
+import configargparse
+
+from utils.database import create_table
+
+p = configargparse.getArgumentParser()
+p.add("--exac-calling-intervals", help="ExAC calling regions .intervals file",
+      default="/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list")
+args = p.parse_args()
+
 # create the database table and indexes if they don't exist yet
 if not ExacCallingInterval.table_exists():
     # parse the exac calling intervals file into a database table
-    EXAC_CALLING_INTERVALS_PATH = "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
-    assert os.path.isfile(EXAC_CALLING_INTERVALS_PATH), \
-        "Couldn't find: %s" % EXAC_CALLING_INTERVALS_PATH
+    assert os.path.isfile(args.exac_calling_intervals), \
+        "Couldn't find: %s" % args.exac_calling_intervals
 
-    utils.database.create_table(calling_intervals_db, ExacCallingInterval, indexes, safe=True)
+    create_table(calling_intervals_db, ExacCallingInterval, indexes, safe=True)
 
-    parse_exac_calling_intervals(EXAC_CALLING_INTERVALS_PATH)
+    parse_exac_calling_intervals(args.exac_calling_intervals)
