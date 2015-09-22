@@ -58,9 +58,6 @@ assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
 n_total = len(EXAC_SAMPLE_ID_TO_BAM_PATH)
 n_include_true = sum(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.values())
 
-logging.info("Loaded %d rows from %s into EXAC_SAMPLE_ID_TO_BAM_PATH, "
-             "EXAC_SAMPLE_ID_TO_GVCF_PATH, EXAC_SAMPLE_ID_TO_INCLUDE_STATUS" % (
-    n_total, args.exac_info_table))
-
-logging.info("%d (%0.1f%%) of the samples have INCLUDE_STATUS = True" % (
-    n_include_true, n_include_true/float(n_total)))
+logging.info("Loaded %s" % args.exac_info_table)
+logging.info("INCLUDE_STATUS = True in %d out of %d (%0.1f%%) samples" % (
+    n_include_true, n_total, 100*n_include_true/float(n_total)))
