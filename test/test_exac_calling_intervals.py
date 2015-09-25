@@ -32,14 +32,14 @@ class TestExacCallingIntervals(unittest.TestCase):
             self.assertRaises(ValueError, get_overlapping_calling_interval, "1", 12772)
 
             # test get_adjacent_calling_interval
-            self.assertListEqual(
-                list(map(str, get_adjacent_calling_intervals("1", 12546))),
-                ["1:12141-12277",
-                 "1:12546-12771",
-                 "1:13354-13689"])
-            self.assertListEqual(
-                list(map(str, get_adjacent_calling_intervals("1", 12546, n_left=2, n_right=2))),
-                ["1:12141-12277",
-                 "1:12546-12771",
-                 "1:13354-13689",
-                 "1:17319-17486"])
+            l,i,r = get_adjacent_calling_intervals("1", 12546)
+            self.assertEqual(len(l), 1)
+            self.assertEqual(len(r), 1)
+            self.assertListEqual(list(map(str, [l[0],i,r[0]])),
+                [ "1:12141-12277", "1:12546-12771", "1:13354-13689"])
+
+            l,i,r = get_adjacent_calling_intervals("1", 12546, n_left=2, n_right=2)
+            self.assertEqual(len(l), 1)
+            self.assertEqual(len(r), 2)
+            self.assertListEqual(list(map(str, [l[0], i, r[0], r[1]])),
+                [ "1:12141-12277", "1:12546-12771", "1:13354-13689", "1:17319-17486"])

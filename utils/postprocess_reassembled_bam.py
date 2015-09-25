@@ -11,6 +11,12 @@ def postprocess_bam(input_bam_path, output_bam_path):
     obfuscates and downsizes read names, discards all tags (including read groups).
 
     If the input bam doesn't have any reads, the output bam won't be written.
+
+    Return:
+        2-tuple with (is_empty, artificial_haplotype_counter) where
+           is_empty: is True if the input_bam was empty
+           artificial_haplotype_counter: the number of artificial haplotypes found in the input bam
+
     """
 
     # This counter is used as a sanity check that HC added at least one read
@@ -22,6 +28,7 @@ def postprocess_bam(input_bam_path, output_bam_path):
     obam = None
 
     # iterate over the reads
+    is_input_bam_empty = True
     for r in ibam:
         #if r.get_tag('RG') == "ArtificialHaplotype":  # this doesn't work with the old version of pysam installed on the cluster
         if dict(r.tags).get('RG') == "ArtificialHaplotype":
@@ -55,21 +62,25 @@ def postprocess_bam(input_bam_path, output_bam_path):
         s.reference_start = r.reference_start
         s.mapping_quality = r.mapping_quality
         s.cigar = r.cigar
-        s.next_reference_id = read_name_hash(r.next_reference_id)
+        s.next_reference_id = r.next_reference_id
         s.next_reference_start = r.next_reference_start
         s.template_length = r.template_length
         s.query_qualities = r.query_qualities
 
         obam.write(s)
 
+        is_input_bam_empty = False
+
     if obam is not None:
         obam.close()
 
+    if not is_input_bam_empty:
         assert artificial_haplotype_counter > 0, \
             "Expected HaplotypeCaller to add at least one record with " \
             "RG == 'ArtificialHaplotype'. " \
             "%(input_bam_path)s => %(output_bam_path)" % locals()
 
+    return (is_input_bam_empty, artificial_haplotype_counter)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Takes an HC output bam and discards non-essential header fields and tags, obfuscates read names, etc.")

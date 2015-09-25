@@ -13,6 +13,8 @@ the data:
 import logging
 import os
 
+from utils.constants import EXAC_INFO_TABLE_PATH
+
 def parse_exac_info_table(info_table_path):
     # parse the ExAC info table to populate the following 3 dictionaries
     sample_id_to_bam_path = {}     # vcf sample_id => bam_path
@@ -38,19 +40,12 @@ def parse_exac_info_table(info_table_path):
     return sample_id_to_bam_path, sample_id_to_gvcf_path, sample_id_include_status
 
 
-import configargparse
-
-p = configargparse.getArgumentParser()
-p.add("--exac-info-table", help="Path of ExAC info table",
-      default='/humgen/atgu1/fs03/lek/resources/ExAC/ExAC.r0.3_meta_Final.tsv')
-args, unknown_args = p.parse_known_args()
-
-assert os.path.isfile(args.exac_info_table), \
-    "Couldn't find exac info table: %s" % args.exac_info_table
+assert os.path.isfile(EXAC_INFO_TABLE_PATH), \
+    "Couldn't find exac info table: %s" % EXAC_INFO_TABLE_PATH
 
 (EXAC_SAMPLE_ID_TO_BAM_PATH,
  EXAC_SAMPLE_ID_TO_GVCF_PATH,
- EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(args.exac_info_table)
+ EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(EXAC_INFO_TABLE_PATH)
 
 assert len(EXAC_SAMPLE_ID_TO_BAM_PATH) == len(EXAC_SAMPLE_ID_TO_GVCF_PATH)
 assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
@@ -58,6 +53,6 @@ assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
 n_total = len(EXAC_SAMPLE_ID_TO_BAM_PATH)
 n_include_true = sum(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.values())
 
-logging.info("Loaded %s" % args.exac_info_table)
+logging.info("Loaded %s" % EXAC_INFO_TABLE_PATH)
 logging.info("INCLUDE_STATUS = True in %d out of %d (%0.1f%%) samples" % (
     n_include_true, n_total, 100*n_include_true/float(n_total)))
