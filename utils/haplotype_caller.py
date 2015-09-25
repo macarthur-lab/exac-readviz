@@ -204,7 +204,7 @@ def run_haplotype_caller(
     (is_reassembled_bam_empty,
      sr.hc_n_artificial_haplotypes) = postprocess_bam(temp_output_bam_path, final_output_bam_path)
 
-    #os.remove(temp_output_bam_path)
+    os.remove(temp_output_bam_path)
 
     if is_reassembled_bam_empty:
         logging.info("%s-%s-%s-%s - %s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id, "reassembled bam is empty"))
