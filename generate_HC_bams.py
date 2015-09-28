@@ -67,14 +67,17 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
         start_pos: integer 1-based inclusive start position of genomic region
         end_pos: integer 1-based inclusive end position of genomic region
     """
+
     # parse the VCF
     tabix_file = pysam.TabixFile(filename=exac_full_vcf, parser=pysam.asTuple())
     last_header_line = list(tabix_file.header)[-1].decode("utf-8", "ignore")
     if chrom:
         logging.info("Processing variants in %s:%s-%s in %s" % (
             chrom, start_pos, end_pos, exac_full_vcf))
+
         if start_pos:
             start_pos = start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
+
         vcf_iterator = tabix_file.fetch(chrom, start_pos, end_pos)
     else:
         logging.info("Processing all variants in %s" % exac_full_vcf)
@@ -97,6 +100,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
 
             # print some stats
             logging.info("-----")
+
             counters["all_alleles"] += 1
             if counters["all_alleles"] % 100 == 0:
                 logging.info(", ".join(["%s=%s" % (k, v) for k,v in sorted(counters.items(), key=lambda kv: kv[0])]),)

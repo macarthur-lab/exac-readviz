@@ -7,9 +7,9 @@ import re
 import time
 
 
-def choose_samples(het_or_hom, alt_allele_index, genotypes, sample_id_include_status):
-    """Contains heuristics for choosing which samples to display for a given
-    variant (chrom, pos, ref, alt) in it's het or hom-alt state.
+def best_for_readviz_sample_id_iter(het_or_hom, alt_allele_index, genotypes, sample_id_include_status):
+    """Implements heuristics for choosing which samples are best to display for
+    a given variant (chrom, pos, ref, alt) in it's het or hom-alt state.
 
     Args:
         het_or_hom: Either "het" or "hom" to indicate whether to choose het or hom-alt samples.
@@ -21,8 +21,8 @@ def choose_samples(het_or_hom, alt_allele_index, genotypes, sample_id_include_st
             True or False depending on the last column of the exac info table
 
     Return:
-        Iterator over sample ids in order - with the ones that should
-        displayed first.
+        Iterator over sample ids in order - from those that should be first to
+        be displayed to those that should be last.
     """
     assert het_or_hom in ["het", "hom"], "Unexpected het_or_hom arg: %s" % het_or_hom
 

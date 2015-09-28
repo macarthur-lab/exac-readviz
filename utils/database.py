@@ -67,12 +67,10 @@ class Variant(_SharedVariantFields):
     # list of bam paths to show (separated by '|') of size = n_available_samples
     readviz_bam_paths = peewee.TextField(default=None, null=True)
 
-
     class Meta:
         indexes = (
             (('chrom', 'pos', 'ref', 'alt', 'het_or_hom'), True), # True means unique index
         )
-
 
 # create table for per-variant-sample info
 # WARNING: this table contains sensitive info (eg. sample ids) and should not
