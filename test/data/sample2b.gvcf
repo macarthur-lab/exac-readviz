@@ -1,0 +1,183 @@
+##fileformat=VCFv4.1
+##ALT=<ID=NON_REF,Description="Represents any possible alternative allele at this location">
+##FILTER=<ID=LowQual,Description="Low quality">
+##FORMAT=<ID=AD,Number=.,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth (reads with MQ=255 or with bad mates are filtered)">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=MIN_DP,Number=1,Type=Integer,Description="Minimum DP observed within the GVCF block">
+##FORMAT=<ID=PL,Number=G,Type=Integer,Description="Normalized, Phred-scaled likelihoods for genotypes as defined in the VCF specification">
+##FORMAT=<ID=SB,Number=4,Type=Integer,Description="Per-sample component statistics which comprise the Fisher's Exact Test to detect strand bias.">
+##GVCFBlock=minGQ=0(inclusive),maxGQ=5(exclusive)
+##GVCFBlock=minGQ=20(inclusive),maxGQ=60(exclusive)
+##GVCFBlock=minGQ=5(inclusive),maxGQ=20(exclusive)
+##GVCFBlock=minGQ=60(inclusive),maxGQ=2147483647(exclusive)
+##INFO=<ID=BaseQRankSum,Number=1,Type=Float,Description="Z-score from Wilcoxon rank sum test of Alt Vs. Ref base qualities">
+##INFO=<ID=ClippingRankSum,Number=1,Type=Float,Description="Z-score From Wilcoxon rank sum test of Alt vs. Ref number of hard clipped bases">
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth; some reads may have been filtered">
+##INFO=<ID=DS,Number=0,Type=Flag,Description="Were any of the samples downsampled?">
+##INFO=<ID=END,Number=1,Type=Integer,Description="Stop position of the interval">
+##INFO=<ID=HaplotypeScore,Number=1,Type=Float,Description="Consistency of the site with at most two segregating haplotypes">
+##INFO=<ID=InbreedingCoeff,Number=1,Type=Float,Description="Inbreeding coefficient as estimated from the genotype likelihoods per-sample when compared against the Hardy-Weinberg expectation">
+##INFO=<ID=MLEAC,Number=A,Type=Integer,Description="Maximum likelihood expectation (MLE) for the allele counts (not necessarily the same as the AC), for each ALT allele, in the same order as listed">
+##INFO=<ID=MLEAF,Number=A,Type=Float,Description="Maximum likelihood expectation (MLE) for the allele frequency (not necessarily the same as the AF), for each ALT allele, in the same order as listed">
+##INFO=<ID=MQ,Number=1,Type=Float,Description="RMS Mapping Quality">
+##INFO=<ID=MQ0,Number=1,Type=Integer,Description="Total Mapping Quality Zero Reads">
+##INFO=<ID=MQRankSum,Number=1,Type=Float,Description="Z-score From Wilcoxon rank sum test of Alt vs. Ref read mapping qualities">
+##INFO=<ID=ReadPosRankSum,Number=1,Type=Float,Description="Z-score from Wilcoxon rank sum test of Alt vs. Ref read position bias">
+##contig=<ID=1,length=249250621>
+##contig=<ID=2,length=243199373>
+##contig=<ID=3,length=198022430>
+##contig=<ID=4,length=191154276>
+##contig=<ID=5,length=180915260>
+##contig=<ID=6,length=171115067>
+##contig=<ID=7,length=159138663>
+##contig=<ID=8,length=146364022>
+##contig=<ID=9,length=141213431>
+##contig=<ID=10,length=135534747>
+##contig=<ID=11,length=135006516>
+##contig=<ID=12,length=133851895>
+##contig=<ID=13,length=115169878>
+##contig=<ID=14,length=107349540>
+##contig=<ID=15,length=102531392>
+##contig=<ID=16,length=90354753>
+##contig=<ID=17,length=81195210>
+##contig=<ID=18,length=78077248>
+##contig=<ID=19,length=59128983>
+##contig=<ID=20,length=63025520>
+##contig=<ID=21,length=48129895>
+##contig=<ID=22,length=51304566>
+##contig=<ID=X,length=155270560>
+##contig=<ID=Y,length=59373566>
+##contig=<ID=MT,length=16569>
+##contig=<ID=GL000207.1,length=4262>
+##contig=<ID=GL000226.1,length=15008>
+##contig=<ID=GL000229.1,length=19913>
+##contig=<ID=GL000231.1,length=27386>
+##contig=<ID=GL000210.1,length=27682>
+##contig=<ID=GL000239.1,length=33824>
+##contig=<ID=GL000235.1,length=34474>
+##contig=<ID=GL000201.1,length=36148>
+##contig=<ID=GL000247.1,length=36422>
+##contig=<ID=GL000245.1,length=36651>
+##contig=<ID=GL000197.1,length=37175>
+##contig=<ID=GL000203.1,length=37498>
+##contig=<ID=GL000246.1,length=38154>
+##contig=<ID=GL000249.1,length=38502>
+##contig=<ID=GL000196.1,length=38914>
+##contig=<ID=GL000248.1,length=39786>
+##contig=<ID=GL000244.1,length=39929>
+##contig=<ID=GL000238.1,length=39939>
+##contig=<ID=GL000202.1,length=40103>
+##contig=<ID=GL000234.1,length=40531>
+##contig=<ID=GL000232.1,length=40652>
+##contig=<ID=GL000206.1,length=41001>
+##contig=<ID=GL000240.1,length=41933>
+##contig=<ID=GL000236.1,length=41934>
+##contig=<ID=GL000241.1,length=42152>
+##contig=<ID=GL000243.1,length=43341>
+##contig=<ID=GL000242.1,length=43523>
+##contig=<ID=GL000230.1,length=43691>
+##contig=<ID=GL000237.1,length=45867>
+##contig=<ID=GL000233.1,length=45941>
+##contig=<ID=GL000204.1,length=81310>
+##contig=<ID=GL000198.1,length=90085>
+##contig=<ID=GL000208.1,length=92689>
+##contig=<ID=GL000191.1,length=106433>
+##contig=<ID=GL000227.1,length=128374>
+##contig=<ID=GL000228.1,length=129120>
+##contig=<ID=GL000214.1,length=137718>
+##contig=<ID=GL000221.1,length=155397>
+##contig=<ID=GL000209.1,length=159169>
+##contig=<ID=GL000218.1,length=161147>
+##contig=<ID=GL000220.1,length=161802>
+##contig=<ID=GL000213.1,length=164239>
+##contig=<ID=GL000211.1,length=166566>
+##contig=<ID=GL000199.1,length=169874>
+##contig=<ID=GL000217.1,length=172149>
+##contig=<ID=GL000216.1,length=172294>
+##contig=<ID=GL000215.1,length=172545>
+##contig=<ID=GL000205.1,length=174588>
+##contig=<ID=GL000219.1,length=179198>
+##contig=<ID=GL000224.1,length=179693>
+##contig=<ID=GL000223.1,length=180455>
+##contig=<ID=GL000195.1,length=182896>
+##contig=<ID=GL000212.1,length=186858>
+##contig=<ID=GL000222.1,length=186861>
+##contig=<ID=GL000200.1,length=187035>
+##contig=<ID=GL000193.1,length=189789>
+##contig=<ID=GL000194.1,length=191469>
+##contig=<ID=GL000225.1,length=211173>
+##contig=<ID=GL000192.1,length=547496>
+##contig=<ID=NC_007605,length=171823>
+##reference=file:///seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	543048-42
+2	676524	.	G	<NON_REF>	.	.	END=676689	GT:DP:GQ:MIN_DP:PL	0/0:0:0:0:0,0,0
+2	677238	.	G	<NON_REF>	.	.	END=677281	GT:DP:GQ:MIN_DP:PL	0/0:5:15:3:0,6,90
+2	677282	.	G	<NON_REF>	.	.	END=677289	GT:DP:GQ:MIN_DP:PL	0/0:9:24:8:0,21,269
+2	677290	.	G	<NON_REF>	.	.	END=677290	GT:DP:GQ:MIN_DP:PL	0/0:8:0:8:0,0,184
+2	677291	.	T	<NON_REF>	.	.	END=677293	GT:DP:GQ:MIN_DP:PL	0/0:8:24:8:0,24,258
+2	677294	.	G	<NON_REF>	.	.	END=677297	GT:DP:GQ:MIN_DP:PL	0/0:9:12:9:0,12,180
+2	677298	.	G	<NON_REF>	.	.	END=677340	GT:DP:GQ:MIN_DP:PL	0/0:10:27:8:0,21,258
+2	677341	.	G	<NON_REF>	.	.	END=677341	GT:DP:GQ:MIN_DP:PL	0/0:10:7:10:0,7,264
+2	677342	.	G	<NON_REF>	.	.	END=677362	GT:DP:GQ:MIN_DP:PL	0/0:9:24:8:0,21,282
+2	677363	.	T	<NON_REF>	.	.	END=677379	GT:DP:GQ:MIN_DP:PL	0/0:7:9:6:0,6,90
+2	677380	.	A	<NON_REF>	.	.	END=677380	GT:DP:GQ:MIN_DP:PL	0/0:7:21:7:0,21,234
+2	677381	.	A	<NON_REF>	.	.	END=677397	GT:DP:GQ:MIN_DP:PL	0/0:7:15:6:0,12,180
+2	905249	.	G	<NON_REF>	.	.	END=905367	GT:DP:GQ:MIN_DP:PL	0/0:74:99:30:0,90,1257
+2	905368	.	C	<NON_REF>	.	.	END=905369	GT:DP:GQ:MIN_DP:PL	0/0:245:0:244:0,0,4870
+2	905370	.	T	<NON_REF>	.	.	END=905392	GT:DP:GQ:MIN_DP:PL	0/0:243:99:238:0,120,1800
+2	905393	.	C	<NON_REF>	.	.	END=905393	GT:DP:GQ:MIN_DP:PL	0/0:238:0:238:0,0,4881
+2	905394	.	T	<NON_REF>	.	.	END=905491	GT:DP:GQ:MIN_DP:PL	0/0:213:99:188:0,120,1800
+2	905492	.	T	G,A,<NON_REF>	620.77	.	BaseQRankSum=-0.838;ClippingRankSum=-1.150;DP=231;MLEAC=0,1,0;MLEAF=0.00,0.500,0.00;MQ=30.07;MQ0=0;MQRankSum=-0.657;ReadPosRankSum=5.335	GT:AD:DP:GQ:PL:SB	0/2:183,1,32,0:216:99:649,1762,15448,0,8079,9429,1468,11087,7768,10672:105,78,29,3
+2	905493	.	T	G,A,<NON_REF>	620.77	.	BaseQRankSum=-0.838;ClippingRankSum=-1.150;DP=231;MLEAC=0,1,0;MLEAF=0.00,0.500,0.00;MQ=30.07;MQ0=0;MQRankSum=-0.657;ReadPosRankSum=5.335	GT:AD:DP:GQ:PL:SB	0/2:183,1,32,0:216:99:649,1762,15448,0,8079,9429,1468,11087,7768,10672:105,78,29,3
+2	905494	.	C	G,<NON_REF>	608.77	.	BaseQRankSum=0.100;ClippingRankSum=-2.123;DP=223;MLEAC=1,0;MLEAF=0.500,0.00;MQ=29.42;MQ0=0;MQRankSum=0.113;ReadPosRankSum=5.614	GT:AD:DP:GQ:PL:SB	0/1:180,31,0:211:99:637,0,9517,1343,9631,10974:104,76,28,3
+2	905495	.	C	G,<NON_REF>	608.77	.	BaseQRankSum=-2.356;ClippingRankSum=-2.000;DP=218;MLEAC=1,0;MLEAF=0.500,0.00;MQ=29.24;MQ0=0;MQRankSum=0.077;ReadPosRankSum=6.375	GT:AD:DP:GQ:PL:SB	0/1:177,29,0:206:99:637,0,9517,1343,9631,10974:103,74,26,3
+2	905496	.	T	<NON_REF>	.	.	END=905496	GT:DP:GQ:MIN_DP:PL	0/0:210:99:210:0,120,1800
+2	905497	.	C	<NON_REF>	.	.	END=905497	GT:DP:GQ:MIN_DP:PL	0/0:206:0:206:0,0,3068
+2	905498	.	C	<NON_REF>	.	.	END=905580	GT:DP:GQ:MIN_DP:PL	0/0:237:99:195:0,120,1800
+2	905581	.	C	<NON_REF>	.	.	END=905581	GT:DP:GQ:MIN_DP:PL	0/0:203:0:203:0,0,0
+2	905582	.	C	<NON_REF>	.	.	END=905594	GT:DP:GQ:MIN_DP:PL	0/0:169:99:160:0,120,1800
+2	905595	.	G	<NON_REF>	.	.	END=905595	GT:DP:GQ:MIN_DP:PL	0/0:156:0:156:0,0,3775
+2	905596	.	G	<NON_REF>	.	.	END=905633	GT:DP:GQ:MIN_DP:PL	0/0:157:99:136:0,120,1800
+2	905634	.	A	<NON_REF>	.	.	END=905634	GT:DP:GQ:MIN_DP:PL	0/0:133:0:133:0,0,3571
+2	905635	.	T	<NON_REF>	.	.	END=905659	GT:DP:GQ:MIN_DP:PL	0/0:134:99:125:0,120,1800
+2	905660	.	G	<NON_REF>	.	.	END=905660	GT:DP:GQ:MIN_DP:PL	0/0:148:3:148:0,4,4062
+2	905661	.	G	<NON_REF>	.	.	END=905661	GT:DP:GQ:MIN_DP:PL	0/0:148:99:148:0,120,1800
+2	905662	.	C	<NON_REF>	.	.	END=905662	GT:DP:GQ:MIN_DP:PL	0/0:151:52:151:0,52,4724
+2	905663	.	C	<NON_REF>	.	.	END=905678	GT:DP:GQ:MIN_DP:PL	0/0:129:99:106:0,62,1800
+2	905679	.	G	<NON_REF>	.	.	END=905679	GT:DP:GQ:MIN_DP:PL	0/0:99:0:99:0,0,2660
+2	905680	.	G	<NON_REF>	.	.	END=905686	GT:DP:GQ:MIN_DP:PL	0/0:96:99:95:0,120,1800
+2	905687	.	C	<NON_REF>	.	.	END=905687	GT:DP:GQ:MIN_DP:PL	0/0:96:0:96:0,0,0
+2	905688	.	T	<NON_REF>	.	.	END=905735	GT:DP:GQ:MIN_DP:PL	0/0:182:99:100:0,120,1800
+2	905736	.	A	<NON_REF>	.	.	END=905736	GT:DP:GQ:MIN_DP:PL	0/0:233:0:233:0,0,5059
+2	905737	.	T	<NON_REF>	.	.	END=905785	GT:DP:GQ:MIN_DP:PL	0/0:280:99:233:0,120,1800
+2	905786	.	G	<NON_REF>	.	.	END=905786	GT:DP:GQ:MIN_DP:PL	0/0:319:0:319:0,0,8074
+2	905787	.	G	<NON_REF>	.	.	END=905804	GT:DP:GQ:MIN_DP:PL	0/0:297:99:288:0,120,1800
+2	905805	.	G	<NON_REF>	.	.	END=905805	GT:DP:GQ:MIN_DP:PL	0/0:288:0:288:0,0,7337
+2	905806	.	G	<NON_REF>	.	.	END=905818	GT:DP:GQ:MIN_DP:PL	0/0:297:99:290:0,120,1800
+2	905819	.	T	<NON_REF>	.	.	END=905819	GT:DP:GQ:MIN_DP:PL	0/0:290:0:290:0,0,7193
+2	905820	.	T	<NON_REF>	.	.	END=905820	GT:DP:GQ:MIN_DP:PL	0/0:292:20:292:0,21,8366
+2	905821	.	T	<NON_REF>	.	.	END=905843	GT:DP:GQ:MIN_DP:PL	0/0:294:99:288:0,120,1800
+2	905844	.	A	<NON_REF>	.	.	END=905844	GT:DP:GQ:MIN_DP:PL	0/0:278:0:278:0,0,0
+2	905845	.	T	<NON_REF>	.	.	END=905869	GT:DP:GQ:MIN_DP:PL	0/0:304:99:283:0,120,1800
+2	905870	.	G	<NON_REF>	.	.	END=905870	GT:DP:GQ:MIN_DP:PL	0/0:336:0:336:0,0,2030
+2	905871	.	G	<NON_REF>	.	.	END=905888	GT:DP:GQ:MIN_DP:PL	0/0:324:99:289:0,120,1800
+2	905889	.	C	<NON_REF>	.	.	END=905889	GT:DP:GQ:MIN_DP:PL	0/0:280:0:280:0,0,0
+2	905890	.	G	<NON_REF>	.	.	END=905913	GT:DP:GQ:MIN_DP:PL	0/0:265:99:255:0,120,1800
+2	905914	.	G	<NON_REF>	.	.	END=905914	GT:DP:GQ:MIN_DP:PL	0/0:247:0:247:0,0,4145
+2	905915	.	C	<NON_REF>	.	.	END=905930	GT:DP:GQ:MIN_DP:PL	0/0:265:99:258:0,120,1800
+2	905931	.	G	<NON_REF>	.	.	END=905931	GT:DP:GQ:MIN_DP:PL	0/0:256:0:256:0,0,5771
+2	905932	.	G	<NON_REF>	.	.	END=905944	GT:DP:GQ:MIN_DP:PL	0/0:236:99:230:0,120,1800
+2	905945	.	T	<NON_REF>	.	.	END=905945	GT:DP:GQ:MIN_DP:PL	0/0:230:0:230:0,0,4318
+2	905946	.	T	<NON_REF>	.	.	END=905955	GT:DP:GQ:MIN_DP:PL	0/0:221:99:215:0,120,1800
+2	905956	.	C	<NON_REF>	.	.	END=905956	GT:DP:GQ:MIN_DP:PL	0/0:212:0:212:0,0,3558
+2	905957	.	C	<NON_REF>	.	.	END=905966	GT:DP:GQ:MIN_DP:PL	0/0:202:99:183:0,120,1800
+2	905967	.	A	<NON_REF>	.	.	END=905967	GT:DP:GQ:MIN_DP:PL	0/0:179:0:179:0,0,0
+2	905968	.	C	<NON_REF>	.	.	END=905995	GT:DP:GQ:MIN_DP:PL	0/0:172:99:139:0,120,1800
+2	946633	.	G	<NON_REF>	.	.	END=946735	GT:DP:GQ:MIN_DP:PL	0/0:0:0:0:0,0,0
+2	946736	.	C	<NON_REF>	.	.	END=946789	GT:DP:GQ:MIN_DP:PL	0/0:2:5:2:0,6,49
+2	946790	.	C	<NON_REF>	.	.	END=946804	GT:DP:GQ:MIN_DP:PL	0/0:2:3:1:0,0,0
+2	1079154	.	T	<NON_REF>	.	.	END=1079319	GT:DP:GQ:MIN_DP:PL	0/0:192:99:108:0,120,1800
+2	1079320	.	C	T,<NON_REF>	6042.77	.	DP=188;MLEAC=2,0;MLEAF=1.00,0.00;MQ=59.53;MQ0=0	GT:AD:DP:GQ:PL:SB	1/1:0,188,0:188:99:6076,565,0,6076,565,6076:0,0,0,0
+2	1079321	.	G	<NON_REF>	.	.	END=1079391	GT:DP:GQ:MIN_DP:PL	0/0:165:99:108:0,120,1800

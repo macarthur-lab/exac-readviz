@@ -58,6 +58,15 @@ def lookup_original_bam_path(sample_id):
 
 
 def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**10):
+    """Generates HC-reassembled bams for all ExAC variants in this inteveral.
+
+    Args:
+        exac_full_vcf: The path of the full vcf
+        bam_output_dir: Top level output dir for all bams
+        chrom: optional genomic region to limit processing
+        start_pos: integer 1-based inclusive start position of genomic region
+        end_pos: integer 1-based inclusive end position of genomic region
+    """
 
     # parse the VCF
     tabix_file = pysam.TabixFile(filename=exac_full_vcf, parser=pysam.asTuple())
@@ -65,6 +74,10 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
     if chrom:
         logging.info("Processing variants in %s:%s-%s in %s" % (
             chrom, start_pos, end_pos, exac_full_vcf))
+
+        if start_pos:
+            start_pos = start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
+
         vcf_iterator = tabix_file.fetch(chrom, start_pos, end_pos)
     else:
         logging.info("Processing all variants in %s" % exac_full_vcf)
@@ -86,6 +99,8 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                 pos, ref, alt)
 
             # print some stats
+            logging.info("-----")
+
             counters["all_alleles"] += 1
             if counters["all_alleles"] % 100 == 0:
                 logging.info(", ".join(["%s=%s" % (k, v) for k,v in sorted(counters.items(), key=lambda kv: kv[0])]),)
@@ -95,14 +110,22 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                 # check if allele has been processed already (skip if yes)
                 vr, created = Variant.get_or_create(
                     chrom=chrom,
-                    minrep_pos=minrep_pos,
-                    minrep_ref=minrep_ref,
-                    minrep_alt=minrep_alt,
+                    pos=minrep_pos,
+                    ref=minrep_ref,
+                    alt=minrep_alt,
                     het_or_hom=het_or_hom)
 
                 if vr.finished:
-                    logging.info("%s-%s-%s-%s %s - already done" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom))
+                    logging.info("%s-%s-%s-%s %s - already done - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom))
                     counters[het_or_hom+"_alleles_already_done"] += 1
+                    continue
+
+                n_expected_samples = n_het if het_or_hom == "het" else n_hom
+                if n_expected_samples == 0:
+                    logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom))
+                    vr.n_expected_samples=0
+                    vr.finished=1
+                    vr.save()
                     continue
 
                 # iterate over samples in order from best-to-show-for-readviz to worst
@@ -130,11 +153,15 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
 
                     if succeeded:
                         chosen_reassembled_bams.append(reassembled_bam_path)
+                        if len(chosen_reassembled_bams) >= n_expected_samples:
+                            logging.info("%s-%s-%s-%s %s - all n_expected_samples == %d now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, n_expected_samples))
+                            break
                         if len(chosen_reassembled_bams) >= MAX_SAMPLES_TO_SHOW_PER_VARIANT:
+                            logging.info("%s-%s-%s-%s %s - all %d samples now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, MAX_SAMPLES_TO_SHOW_PER_VARIANT))
                             break
 
                 # save variant record
-                vr.n_expected_samples=n_het if het_or_hom == "het" else n_hom
+                vr.n_expected_samples=min(n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
                 vr.n_available_samples=len(chosen_reassembled_bams)
                 vr.readviz_bam_paths="|".join(chosen_reassembled_bams)
                 vr.finished=1
@@ -142,14 +169,14 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
 
 
     logging.info(", ".join(["%s=%s" % (k, v) for k,v in sorted(counters.items(), key=lambda kv: kv[0])]),)
-    logging.info("Finished processing interval: %s:%s-%s" % (chrom, start_pos, end_pos))
+    logging.info("generate_HC_bams finished: %s:%s-%s" % (chrom, start_pos, end_pos))
 
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
     p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default='/broad/hptmp/exac_readviz_backend/')
     p.add("--chrom", help="If specified, only process this chromosome")
-    p.add("--start-pos", help="If specified, only process region in this interval", type=int)
-    p.add("--end-pos", help="If specified, only process region in this interval", type=int)
+    p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
+    p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
     args = p.parse_args()
 
     logging.info("Running with settings: ")

@@ -1,3 +1,4 @@
+awesome-slugify
 configargparse
 peewee
 pysam

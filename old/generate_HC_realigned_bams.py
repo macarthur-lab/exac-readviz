@@ -507,7 +507,7 @@ def main(args):
             # skip variants that are already finished
             #(already_finished,) = variants_db.execute(
             #    "SELECT count(*) FROM t "
-            #    "WHERE chrom=? AND minrep_pos=? AND minrep_ref=? AND minrep_alt=? and finished=1", (
+            #    "WHERE chrom=? AND pos=? AND ref=? AND alt=? and finished=1", (
             #    chrom, minrep_pos, minrep_ref, minrep_alt)).fetchone()
             #if already_finished:
             #    continue
@@ -665,7 +665,7 @@ def main(args):
             variants_db.execute("UPDATE t SET "
                 "finished=1, reassembled_bams_het=?, reassembled_bams_hom=?"
                 "WHERE "
-                "chrom=? AND minrep_pos=? AND minrep_ref=? AND minrep_alt=?", (
+                "chrom=? AND pos=? AND ref=? AND alt=?", (
                     ",".join(relative_reassembled_bam_paths["het"]),
                     ",".join(relative_reassembled_bam_paths["hom"]),
                     chrom, minrep_pos, minrep_ref, minrep_alt))
