@@ -21,7 +21,7 @@ import subprocess
 
 from utils.database import init_db, Variant
 from utils.choose_samples import best_for_readviz_sample_id_iter
-from utils.constants import MAX_SAMPLES_TO_SHOW_PER_VARIANT, EXAC_FULL_VCF_PATH
+from utils.constants import MAX_SAMPLES_TO_SHOW_PER_VARIANT, EXAC_FULL_VCF_PATH, BAM_OUTPUT_DIR
 from utils.exac_info_table import EXAC_SAMPLE_ID_TO_BAM_PATH, EXAC_SAMPLE_ID_TO_GVCF_PATH, EXAC_SAMPLE_ID_TO_INCLUDE_STATUS
 from utils.exac_vcf import create_vcf_row_parser
 from utils.minimal_representation import get_minimal_representation
@@ -52,9 +52,6 @@ def lookup_original_bam_path(sample_id):
     bam_path = re.sub("/v[0-9]{1,2}/", "/current/", bam_path)  # get latest version of the bam
 
     return bam_path
-
-
-
 
 
 def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**10):
@@ -129,6 +126,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     continue
 
                 # iterate over samples in order from best-to-show-for-readviz to worst
+                failed_sample_counter = 0
                 chosen_reassembled_bams = []
                 for next_best_readviz_sample_id in best_for_readviz_sample_id_iter(
                             het_or_hom,
@@ -159,10 +157,13 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                         if len(chosen_reassembled_bams) >= MAX_SAMPLES_TO_SHOW_PER_VARIANT:
                             logging.info("%s-%s-%s-%s %s - all %d samples now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, MAX_SAMPLES_TO_SHOW_PER_VARIANT))
                             break
+                    else:
+                        failed_sample_counter += 1
 
                 # save variant record
                 vr.n_expected_samples=min(n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
                 vr.n_available_samples=len(chosen_reassembled_bams)
+                vr.n_failed_samples=failed_sample_counter
                 vr.readviz_bam_paths="|".join(chosen_reassembled_bams)
                 vr.finished=1
                 vr.save()
@@ -173,7 +174,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
 
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
-    p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default='/broad/hptmp/exac_readviz_backend/')
+    p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default=BAM_OUTPUT_DIR)
     p.add("--chrom", help="If specified, only process this chromosome")
     p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
     p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
