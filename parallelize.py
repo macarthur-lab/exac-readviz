@@ -40,7 +40,7 @@ p = argparse.ArgumentParser()
 p.add_argument("-L", "--interval-list", help="An interval file")
 p.add_argument("-n", "--num-jobs", help="Number of array job tasks to launch")
 p.add_argument("-isize", "--interval-size", help="Max interval size", default=200)
-p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac_readviz_backend/logs")
+p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac_readviz_backend2/logs")
 p.add_argument("-local", "--run-local", help="Run locally instead of submitting array jobs", action="store_true")
 p.add_argument("-f", "--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
 p.add_argument("command", nargs="+", help="The command to parallelize. The command must work with --chrom, --start-pos, --end-pos")
@@ -55,6 +55,8 @@ args.command = " ".join(args.command)
 logging.info("db_table_name: " + db_table_name)
 
 db = playhouse.pool.PooledMySQLDatabase('parallelize', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
+
+print("Starting..")
 
 # table for keeping track of which intervals some_script.py has already processed
 class ParallelIntervals(peewee.Model):
@@ -96,7 +98,7 @@ if is_startup:
     if not args.interval_list:
         p.error("-L arg required")
 
-    if not args.num_jobs:
+    if not args.num_jobs and not args.run_local:
         p.error("--num-jobs arg required")
 
     # create intervals
@@ -153,7 +155,7 @@ if is_startup:
     # start array job with N jobs, running self
     if not args.run_local:
         if not os.path.isdir(args.log_dir):
-            os.system("mkdir -p %s" % args.log_dir)
+            os.system("mkdir -m 777 -p %s" % args.log_dir)
 
         launch_array_job_cmd = ("qsub -q short "
                 "-t 1-%(num_jobs)s "
@@ -168,13 +170,19 @@ if is_startup:
         logging.info("Running: %s" % launch_array_job_cmd)
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
-        # TODO run loop that restarts array jobs
+        # run several times
+        subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
 
+        # TODO run loop that restarts array jobs
 
 if not is_startup or args.run_local:
     # this instance of parallelize.py is running as one of many array job tasks.
     # run a loop that continually launches some_script.py on the next unprocessed
     # interval until times runs out for this task
+
+    logging.info("USER: %s" % os.getenv('USER', ''))
 
     job_id = os.getenv('JOB_ID', -1)
     if job_id != -1 and job_id != "undefined" and not args.run_local:
@@ -220,8 +228,7 @@ if not is_startup or args.run_local:
         logging.info("interval: %s:%s-%s - launching %s" % (
             current_interval.chrom, current_interval.start_pos, current_interval.end_pos, cmd))
         try:
-            cmd_output = subprocess.check_output(cmd.split(" "), stderr=subprocess.STDOUT)
-            cmd_output = cmd_output.decode('ascii')
+            cmd_output = subprocess.check_output(cmd.split(" "), stderr=subprocess.STDOUT).decode()
             for line in cmd_output.split("\n"):
                 logging.info("      %s" % line.strip())
             if "generate_HC_bams finished" not in cmd_output:

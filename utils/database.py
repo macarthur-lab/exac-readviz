@@ -61,9 +61,9 @@ class _SharedVariantFields(_SharedMeta):
 # the readviz backend to generate the readviz frontend for each variant page
 class Variant(_SharedVariantFields):
     # number of samples the user expects (this will be 5 or fewer)
-    n_expected_samples = peewee.IntegerField(default=-1, index=True)
+    n_expected_samples = peewee.IntegerField(index=True, null=True)
     # number of samples available (this may be < n_expected_samples if bams are missing or GVCF calls couldn't be reproduced for some samples)
-    n_available_samples = peewee.IntegerField(default=-1, index=True)
+    n_available_samples = peewee.IntegerField(index=True, null=True)
     # list of bam paths to show (separated by '|') of size = n_available_samples
     readviz_bam_paths = peewee.TextField(default=None, null=True)
 
@@ -77,7 +77,7 @@ class Variant(_SharedVariantFields):
 # be publicly available
 class Sample(_SharedVariantFields):
     sample_id = peewee.CharField(index=True, max_length=MAX_VCF_SAMPLE_ID_SIZE)
-    sample_i = peewee.IntegerField(default=-1, null=True)
+    sample_i = peewee.IntegerField(null=True)
 
     original_bam_path = peewee.TextField(null=True)
     original_gvcf_path = peewee.TextField(null=True)
