@@ -15,6 +15,8 @@ NUM_OUTPUT_DIRECTORIES_L1 = 1000
 
 INCLUDE_N_ADJACENT_CALLING_REGIONS = 2
 
+BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend2/"
+
 EXAC_CALLING_INTERVALS_PATH = "/seq/references/Homo_sapiens_assembly19/v1/variant_calling/exome_calling_regions.v1.interval_list"
 EXAC_INFO_TABLE_PATH = "/humgen/atgu1/fs03/lek/resources/ExAC/ExAC.r0.3_meta_Final.tsv"
 EXAC_FULL_VCF_PATH = "/humgen/atgu1/fs03/konradk/exac/gqt/exac_all.vcf.gz"

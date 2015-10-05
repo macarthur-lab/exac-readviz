@@ -120,7 +120,7 @@ def run_haplotype_caller(
        'java',
         #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
         "-Xmx6500m",
-        '-jar', '/seq/software/picard/current/3rd_party/gatk/GenomeAnalysisTK-3.1-144-g00f68a3.jar',
+        '-jar', '/humgen/gsa-hpprojects/dev/gauthier/scratch/noMQ0sInBamout/GenomeAnalysisTK.jar',
         '-T', 'HaplotypeCaller',
         '-R', "/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta",
         '--disable_auto_index_creation_and_locking_when_reading_rods',
@@ -150,8 +150,8 @@ def run_haplotype_caller(
         logging.info("%s-%s-%s-%s %s - %s - launching HC %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_id, " ".join(dash_L_intervals)))
         logging.info(sr.hc_command_line)
         #os.system(" ".join(gatk_cmd))
-        cmd_output = subprocess.check_output(gatk_cmd, stderr=subprocess.STDOUT)
-        if "Total runtime" not in str(cmd_output):
+        cmd_output = subprocess.check_output(gatk_cmd, stderr=subprocess.STDOUT).decode()
+        if "Total runtime" not in cmd_output:
             raise subprocess.CalledProcessError(100, sr.hc_command_line, cmd_output)
     except subprocess.CalledProcessError as e:
         error_message = ("%s\n"
@@ -159,16 +159,15 @@ def run_haplotype_caller(
             "output: %s") % (sr.hc_command_line, e.returncode, e.output.strip())
         # add the return code to the ERROR_CODE so that different types of crashes have a different error code
         hc_failed(ERROR_HC_CRASHED + abs(e.returncode) % 500, error_message, sr, files_to_delete_on_error)
-        logging.error(
-            "ERROR: HC failed: return code %s." % e.returncode)
+        logging.error("ERROR: HC failed: return code %s." % e.returncode)
         #logging.error("   GATK output:\n%s" % sample_record.hc_error_text)
         return (False, None)
 
     # check GVCF against original GVCF call
     if not sr.is_missing_original_gvcf:
         logging.info("%s-%s-%s-%s %s - %s - checking gvcfs" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_id))
-        gvcf_calls_matched, mismatch_error_code, mismatch_error_text = check_gvcf(
-            sr.original_gvcf_path, temp_output_gvcf_path, chrom, minrep_pos)
+        gvcf_calls_matched, mismatch_error_code, mismatch_error_text = retry_if_IOError(
+            check_gvcf, sr.original_gvcf_path, temp_output_gvcf_path, chrom, minrep_pos)
 
         if not gvcf_calls_matched:
             sr.finished=1
@@ -203,21 +202,21 @@ def run_haplotype_caller(
 
             return (False, None)
         else:
-            os.remove(temp_output_gvcf_path)
-            os.remove(temp_output_gvcf_path+".idx")
+            run("rm %s" % temp_output_gvcf_path)
+            run("rm %s" % (temp_output_gvcf_path+".idx"))
 
     # postprocess and move output bam from temp_output_bam_path to output_bam_path
     # strip out read groups, read ids, tags, etc. to remove any sensitive info and reduce bam size
     final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
-    (is_reassembled_bam_empty,
-     sr.hc_n_artificial_haplotypes) = postprocess_bam(temp_output_bam_path, final_output_bam_path)
 
-    os.remove(temp_output_bam_path)
+    (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes) = retry_if_IOError(
+        postprocess_bam, temp_output_bam_path, final_output_bam_path)
+
+    run("rm %s" % temp_output_bam_path)
 
     if is_reassembled_bam_empty:
         logging.info("%s-%s-%s-%s - %s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id, "reassembled bam is empty"))
 
-        sr.finished=1
         files_to_delete_on_error[0] = final_output_bam_path
         files_to_delete_on_error[1] = final_output_bam_path+".bai"
         hc_failed(ERROR_REASSEMBLED_BAM_IS_EMPTY, sr.hc_command_line, sr, files_to_delete_on_error)
@@ -253,7 +252,6 @@ def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_ho
     return os.path.join(output_dir, output_bam_filename)
 
 
-
 def run(command, verbose=False):
     """Utility method to execute a shell command"""
     if verbose:
@@ -263,6 +261,19 @@ def run(command, verbose=False):
 
 
 _missing_files_cache = set()  # used to speed up the does_file_exist(..) method
+
+def retry_if_IOError(f, *args, **kwargs):
+    num_retries = 3
+    for retry_counter in range(num_retries):
+        try:
+            return f(*args, **kwargs)
+        except OSError as e:
+            err = e
+            time.sleep(1)
+        except Exception as e:
+            raise e  # some other error occured, so just raise it
+    raise err  # all retries failed
+
 
 def does_file_exist(file_path, num_retries=3):
     """Returns true if the given file exists, using num_retries to allow for
@@ -291,4 +302,4 @@ def hc_failed(error_code, message, sample_record, files_to_delete=None):
     if files_to_delete:
         for path in files_to_delete:
             if os.path.isfile(path):
-                os.remove(path)
+                run("rm %s" % path)
