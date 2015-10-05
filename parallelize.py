@@ -21,15 +21,12 @@ python parallelize.py -L /seq/references/Homo_sapiens_assembly19/v1/variant_call
 
 import argparse
 import datetime
-import itertools
 import os
 import peewee
 import playhouse.pool
 import random
 import slugify
 import subprocess
-import sys
-import time
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -41,6 +38,7 @@ p.add_argument("-L", "--interval-list", help="An interval file")
 p.add_argument("-n", "--num-jobs", help="Number of array job tasks to launch")
 p.add_argument("-isize", "--interval-size", help="Max interval size", default=200)
 p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac_readviz_backend2/logs")
+p.add_argument("-bsub", "--run-on-LSF", help="Submit to LSF", action="store_true")
 p.add_argument("-local", "--run-local", help="Run locally instead of submitting array jobs", action="store_true")
 p.add_argument("-f", "--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
 p.add_argument("command", nargs="+", help="The command to parallelize. The command must work with --chrom, --start-pos, --end-pos")
@@ -157,13 +155,21 @@ if is_startup:
         if not os.path.isdir(args.log_dir):
             os.system("mkdir -m 777 -p %s" % args.log_dir)
 
-        launch_array_job_cmd = ("qsub -q short "
+        if args.run_on_LSF:
+            launch_array_job_cmd = (
+                "bsub -N -J prog[1-%(num_jobs)s] -o %(log_dir)s -q hour "
+                    "python3.4 parallelize.py %(command)s"
+            )
+        else:
+            launch_array_job_cmd = ("qsub -q short "
                 "-t 1-%(num_jobs)s "
                 "-cwd "
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
-                "./run_python.sh python3.4 parallelize.py %(command)s") % {
+                "./run_python.sh python3.4 parallelize.py %(command)s")
+
+        launch_array_job_cmd = launch_array_job_cmd  % {
             "num_jobs": args.num_jobs,
             "log_dir" : args.log_dir,
             "command" : args.command}
@@ -184,7 +190,7 @@ if not is_startup or args.run_local:
 
     logging.info("USER: %s" % os.getenv('USER', ''))
 
-    job_id = os.getenv('JOB_ID', -1)
+    job_id = os.getenv('JOB_ID', os.getenv('LSB_JOBID', -1))
     if job_id != -1 and job_id != "undefined" and not args.run_local:
         logging.info("parallelize.py - job id: %s" % job_id)
     else:
