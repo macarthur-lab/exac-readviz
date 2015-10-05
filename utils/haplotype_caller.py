@@ -117,7 +117,12 @@ def run_haplotype_caller(
 
     # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
     gatk_cmd = [
-       'java',
+        "java",
+        "-XX:+UseSerialGC",
+        "-XX:+ReduceSignalUsage",
+        "-XX:+UseSerialGC",
+        "-XX:CICompilerCount=1",
+        "-XX:+DisableAttachMechanism",
         #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
         "-Xmx6500m",
         '-jar', '/humgen/gsa-hpprojects/dev/gauthier/scratch/noMQ0sInBamout/GenomeAnalysisTK.jar',
@@ -198,7 +203,7 @@ def run_haplotype_caller(
             run("ln -s -f %s %s" % (original_gvcf_path, symlink_path))
             run("ln -s -f %s %s" % (original_gvcf_path + ".tbi", symlink_path + ".tbi"))
 
-            take_screenshots(chrom, minrep_pos, igv_tracks, absolute_debug_dir)
+            #take_screenshots(chrom, minrep_pos, igv_tracks, absolute_debug_dir)
 
             return (False, None)
         else:
