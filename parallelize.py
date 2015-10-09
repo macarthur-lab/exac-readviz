@@ -4,7 +4,7 @@
 This script takes the name of another python script (let's say some_script.py)
 and launches N parallel instances of some_script.py on the short queue as an
 array job. Each instance of some_script.py will get passed
- --chrom, --start, and --end args which will define the genomic
+ --chrom, --start-pos, and --end-pos args which will define the genomic
 region it should operate on. This region should be small enough for
 some_script.py to finish in < 4 hours (the short queue's runtime limit) in the
 worst case. It's up to some_script.py to avoid redoing the same work if
@@ -36,20 +36,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datef
 p = argparse.ArgumentParser()
 p.add_argument("-L", "--interval-list", help="An interval file")
 p.add_argument("-n", "--num-jobs", help="Number of array job tasks to launch")
-p.add_argument("-isize", "--interval-size", help="Max interval size", default=200)
+p.add_argument("-isize", "--interval-size", help="Max interval size", type=int, default=200)
 p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac_readviz_backend2/logs")
 p.add_argument("-bsub", "--run-on-LSF", help="Submit to LSF", action="store_true")
 p.add_argument("-local", "--run-local", help="Run locally instead of submitting array jobs", action="store_true")
-p.add_argument("-f", "--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
+p.add_argument("--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
 p.add_argument("command", nargs="+", help="The command to parallelize. The command must work with --chrom, --start-pos, --end-pos")
 
-args = p.parse_args()
-
-db_table_name = "%s_i%d" % ("_".join(args.command[0:2]), args.interval_size)
+args, unknown_args = p.parse_known_args()
+db_table_name = "%s_i%d" % ("_".join([a for a in args.command + unknown_args if not a.startswith("-")][0:2]), args.interval_size)
 db_table_name = slugify.slugify(db_table_name).replace("-", "_")  # remove special chars
 
-args.command = " ".join(args.command)
-#logging.info("args: command: " + args.command)
+args.command = " ".join(args.command + unknown_args)
+
+logging.info("args: command: " + args.command)
 logging.info("db_table_name: " + db_table_name)
 
 db = playhouse.pool.PooledMySQLDatabase('parallelize', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
@@ -75,6 +75,8 @@ class ParallelIntervals(peewee.Model):
 
     error_code = peewee.IntegerField(default=0, index=True)
     error_message = peewee.TextField(null=True)
+
+    priority = peewee.IntegerField(null=True, index=True)  # lower is better
 
     # execution environment stats
     machine_hostname = peewee.CharField(null=True, max_length=100)
@@ -141,7 +143,8 @@ if is_startup:
 
         insert_batch_size = 25000  # a batch size that's too large will cause query to fail
         for batch_start in range(0, len(final_intervals), insert_batch_size):
-            logging.info("Inserting records %s through %s" % (batch_start, batch_start + insert_batch_size))
+            logging.info("Inserting records %s through %s" % (
+                batch_start, min(len(final_intervals), batch_start + insert_batch_size)))
             batch = final_intervals[batch_start: batch_start + insert_batch_size]
             ParallelIntervals.insert_many(batch).execute()
 
@@ -158,7 +161,7 @@ if is_startup:
         if args.run_on_LSF:
             launch_array_job_cmd = (
                 "bsub -N -J prog[1-%(num_jobs)s] -o %(log_dir)s -q hour "
-                    "python3.4 parallelize.py %(command)s"
+                    "python3.4 parallelize.py -isize %(interval_size)s %(command)s"
             )
         else:
             launch_array_job_cmd = ("qsub -q short "
@@ -167,9 +170,12 @@ if is_startup:
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
-                "./run_python.sh python3.4 parallelize.py %(command)s")
+                "./run_python.sh python3.4 parallelize.py "
+                                    "-isize %(interval_size)s "
+                                    "%(command)s")
 
         launch_array_job_cmd = launch_array_job_cmd  % {
+            "interval_size" : args.interval_size,
             "num_jobs": args.num_jobs,
             "log_dir" : args.log_dir,
             "command" : args.command}
@@ -177,9 +183,9 @@ if is_startup:
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # run several times
-        subprocess.check_call(launch_array_job_cmd, shell=True)
-        subprocess.check_call(launch_array_job_cmd, shell=True)
-        subprocess.check_call(launch_array_job_cmd, shell=True)
+        #subprocess.check_call(launch_array_job_cmd, shell=True)
+        #subprocess.check_call(launch_array_job_cmd, shell=True)
+        #subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # TODO run loop that restarts array jobs
 
@@ -214,8 +220,11 @@ if not is_startup or args.run_local:
                     ParallelIntervals.job_id >> None) & (
                     ParallelIntervals.task_id >> None) & (
                     ParallelIntervals.unique_id >> None))\
-                .limit(1) #.order_by(peewee.fn.Rand())\
+                .limit(1)
             )
+
+            #.order_by(ParallelIntervals.priority)\
+            #.order_by(peewee.fn.Rand())\
 
             if len(unprocessed_intervals) == 0:
                 logging.info("Finished all intervals. Exiting..")
