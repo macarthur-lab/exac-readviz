@@ -246,7 +246,7 @@ if not is_startup or args.run_local:
             cmd_output = subprocess.check_output(cmd.split(" "), stderr=subprocess.STDOUT).decode()
             for line in cmd_output.split("\n"):
                 logging.info("      %s" % line.strip())
-            if "generate_HC_bams finished" not in cmd_output:
+            if "generate_HC_bams finished" not in cmd_output and "-- interval finished --" not in cmd_output:
                 raise subprocess.CalledProcessError(100, cmd, cmd_output)
         except subprocess.CalledProcessError as e:
             error_message = ("%s\n"
