@@ -3,10 +3,20 @@ import os
 import sys
 from mysql.connector import MySQLConnection
 
+set_intervals_where_all_intervals_have_finished = 0
+reset_missing_bams_that_actually_exist = 0
+reset_samples_with_transient_errors = 0
+reset_unfinished_intervals_in_important_genes = 0
+reset_intervals_that_contain_unfinished_variants = 0
+reset_intervals_that_had_error_code = 0
+allow_unifinished_intervals_to_be_rerun = 0
+
+
+
+
 print("Connecting to db")
 conn = MySQLConnection(user='root', host='exac-dev', port=3307, database='exac_readviz')
 c = conn.cursor(buffered=True)
-
 
 def print_query(q):
     print(q)
@@ -16,9 +26,11 @@ def run_query(q):
     print('---------')
     print(q)
     c.execute(q)
-    if q.lower().strip().startswith("update"):
+    if not q.lower().strip().startswith("select"):
         conn.commit()
-    print("%d rows" % c.rowcount)
+        print("%d rows updated" % c.rowcount)
+    else:
+        print("%d rows returned" % c.rowcount)
     return c
 
 """
@@ -50,7 +62,7 @@ def run_query(q):
 +----------------------------+--------------+------+-----+---------+----------------+
 """
 
-reset_missing_bams_that_actually_exist = False
+
 if reset_missing_bams_that_actually_exist:
     print("step 1: Find bams that caused a file-doesn't-exist error, but actually do exist")
     c.execute("select distinct original_bam_path from sample where hc_error_code=1000")
@@ -70,21 +82,22 @@ if reset_missing_bams_that_actually_exist:
                "set s.finished=0 where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and s.hc_error_code=1000 and s.original_bam_path IN %s") % str(found_bam_paths))
 
 
-reset_samples_with_transient_errors = True
+
+
 if reset_samples_with_transient_errors:
 
     print("For *samples* with transient errors, reset them to finished=0")
     run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
                "set s.finished=0, s.hc_error_code=NULL, s.hc_error_text=NULL "
-               "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or s.hc_error_text like '%ermiss%') "    # 3001,
+               "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
     print("For *variants* with transient errors, reset them to finished=0")
     run_query(("update variant as v join sample as s on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
                "set v.finished=0 "
-               "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or s.hc_error_text like '%ermiss%') "    # 3001,
+               "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
 ALL_CHROMS = list(map(str, [10,11,12,13,14,15,16,17,18,19,20,21,22, 1,2,3,4,5,6,7,8,9, 'X','Y']))
@@ -92,7 +105,6 @@ ALL_CHROMS = list(map(str, [10,11,12,13,14,15,16,17,18,19,20,21,22, 1,2,3,4,5,6,
 
 
 # reset unfinished intervals not in top genes and not in genomic regions
-reset_unfinished_intervals_in_important_genes = False
 if reset_unfinished_intervals_in_important_genes:
 
     print("Reset intervals in important genes")
@@ -114,6 +126,7 @@ if reset_unfinished_intervals_in_important_genes:
     print("Reset intervals overlapping intervals of interest")
     run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set job_id=NULL, task_id=NULL, unique_id=NULL "
                "where (job_id is NULL or job_id = -1 ) and finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
+
 
 
 
@@ -150,19 +163,31 @@ print("total: %s intervals" % total)
 
 
 
+# set intervals as finished if all variants in them are finished
+if set_intervals_where_all_intervals_have_finished:
+    print("Doing set_intervals_where_all_intervals_have_finished")
+    for current_chrom in ALL_CHROMS:
+        #all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
+        for _, start_pos, end_pos, _, _, _ in all_intervals[current_chrom]:
+            c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and pos >= %(start_pos)s and pos <= %(end_pos)s and finished=0" % locals())
+            if c.rowcount > 0:
+                print("Found %s unfinished variants in %s:%s-%s. Skipping" % (c.rowcount, current_chrom, start_pos, end_pos))
+            else:
+                run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set job_id=1, started=1, finished=1 "
+                           "where chrom='%(current_chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
+
 
 # reset intervals marked as finished
-reset_intervals_that_contain_unfinished_variants = True
 if reset_intervals_that_contain_unfinished_variants:
     for current_chrom in ALL_CHROMS:
-        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and finished=0" % locals()) #" and chrom in %(FINISHED_CHROMOSOMES)s" % locals())
-        all_uninished_variants = c.fetchall()
+        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and finished=0 order by pos asc" % locals()) #" and chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+        all_unfinished_variants = c.fetchall()
 
         unfinished_intervals_marked_as_finished = set()
         current_interval = None
-        print("Checking for unfinished_intervals_marked_as_finished using %s unfinished variants in chr%s" % (len(all_uninished_variants), current_chrom))
+        print("Checking for unfinished_intervals_marked_as_finished using %s unfinished variants in chr%s" % (len(all_unfinished_variants), current_chrom))
 
-        for chrom, pos in all_uninished_variants:
+        for chrom, pos in all_unfinished_variants:
             pos = int(pos)
             if current_interval is None or current_interval[0] != chrom or pos < current_interval[1] or pos > current_interval[2]:
                 for i in all_intervals[chrom]:
@@ -175,6 +200,7 @@ if reset_intervals_that_contain_unfinished_variants:
                         break
                 else:
                     raise ValueError("%(chrom)s-%(pos)s is not in any intervals" % locals())
+
             #else:
                 #print("%(chrom)s %(pos)s is in same interval %(current_interval)s" % locals())
 
@@ -192,6 +218,15 @@ if reset_intervals_that_contain_unfinished_variants:
         #            "job_id=NULL, task_id=NULL, unique_id=NULL, started=0, "
         #            "started_date=NULL, finished=0, finished_date=NULL, "
         #            "error_code=500, error_message=NULL where finished=0 and started_date <")
+
+if reset_intervals_that_had_error_code:
+    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 set finished=0 where error_code > 0")
+
+if allow_unifinished_intervals_to_be_rerun:
+    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
+              "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
+              "where finished=0")
+
 
 print("Done")
 
