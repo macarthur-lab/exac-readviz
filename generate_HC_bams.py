@@ -7,17 +7,14 @@ run in parallel (for example in an array job) to speed up execution.
 
 
 import configargparse
-configargparse.initArgumentParser(default_config_files=["~/.generate_HC_bams_config"],
-                                  formatter_class=configargparse.ArgumentDefaultsHelpFormatter)
+configargparse.initArgumentParser(
+    default_config_files=["~/.generate_HC_bams_config"],
+    formatter_class=configargparse.ArgumentDefaultsHelpFormatter)
 
 import collections
-import datetime
 import gzip
-import logging
-import os
 import pysam
 import re
-import subprocess
 
 from utils.database import init_db, Variant
 from utils.choose_samples import best_for_readviz_sample_id_iter
@@ -29,7 +26,10 @@ from utils.haplotype_caller import run_haplotype_caller
 
 
 import logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s: %(message)s',
+    datefmt='%m/%d/%Y %I:%M:%S %p')
 
 
 def lookup_original_bam_path(sample_id):
@@ -134,20 +134,24 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                             all_genotypes_in_row,
                             EXAC_SAMPLE_ID_TO_INCLUDE_STATUS):
 
-                    original_bam_path = lookup_original_bam_path(next_best_readviz_sample_id)
-                    original_gvcf_path = EXAC_SAMPLE_ID_TO_GVCF_PATH[next_best_readviz_sample_id]
+                    try:
+                        original_bam_path = lookup_original_bam_path(next_best_readviz_sample_id)
+                        original_gvcf_path = EXAC_SAMPLE_ID_TO_GVCF_PATH[next_best_readviz_sample_id]
 
-                    succeeded, reassembled_bam_path = run_haplotype_caller(
-                        chrom,
-                        minrep_pos,
-                        minrep_ref,
-                        minrep_alt,
-                        het_or_hom,
-                        original_bam_path,
-                        original_gvcf_path,
-                        bam_output_dir,
-                        next_best_readviz_sample_id,
-                        sample_i=len(chosen_reassembled_bams))
+                        succeeded, reassembled_bam_path = run_haplotype_caller(
+                            chrom,
+                            minrep_pos,
+                            minrep_ref,
+                            minrep_alt,
+                            het_or_hom,
+                            original_bam_path,
+                            original_gvcf_path,
+                            bam_output_dir,
+                            next_best_readviz_sample_id,
+                            sample_i=len(chosen_reassembled_bams))
+                    except Exception as e:
+                        logging.error("%s-%s-%s-%s %s - error in run_haplotype_caller: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, e))
+                        succeeded = False
 
                     if succeeded:
                         chosen_reassembled_bams.append(reassembled_bam_path)
