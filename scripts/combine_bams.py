@@ -11,7 +11,6 @@ import os
 import peewee
 from playhouse import shortcuts
 import pysam
-import re
 import traceback
 
 from utils.database import Variant
@@ -37,7 +36,7 @@ def bam_path_to_read_group_id(bam_path):
     return os.path.basename(bam_path.replace("chr", "").replace(".bam", ""))
 
 
-def combine_bams(temp_dir, chrom, position_hash, force=False):
+def combine_bams(output_dir, chrom, position_hash, force=False):
     """Generates the combined bam.
     Args:
         force: proceed even if the .bam and .db are already there on disk.
@@ -45,7 +44,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
 
     hash_dir = "%03d" % (position_hash % 1000)
 
-    obam_path = os.path.join(temp_dir, "combined_bams", chrom, "_tmp.combined_chr%s_%s.bam" % (chrom, hash_dir))
+    obam_path = os.path.join(output_dir, "combined_bams", chrom, "_tmp.combined_chr%s_%s.bam" % (chrom, hash_dir))
     sorted_bam_path = obam_path.replace("_tmp.", "")
 
     sqlite_db_path = os.path.basename(obam_path.replace(".bam", ".db"))
@@ -72,7 +71,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
             expected_to_be_available_bam_paths.update(v.readviz_bam_paths.split("|"))
 
     # check how many are actually on disk
-    actually_available_bam_paths = set(glob.glob(os.path.join(temp_dir, chrom, hash_dir, 'chr*.bam')))
+    actually_available_bam_paths = set(glob.glob(os.path.join(output_dir, chrom, hash_dir, 'chr*.bam')))
 
     num_actually_available_bams = len(actually_available_bam_paths)
     logging.info("num_actually_available_bams = %(num_actually_available_bams)s (from looking on disk)" % locals())
@@ -81,7 +80,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
         logging.error("ERROR: %(num_expected_to_be_available_bams)s > %(num_actually_available_bams)s " % locals())
 
     # make sure that all of the expected_to_be_available_bam_paths are actually available
-    actually_available_bam_paths = set(map(lambda p: p.replace(temp_dir, ""), actually_available_bam_paths))
+    actually_available_bam_paths = set(map(lambda p: p.replace(output_dir, ""), actually_available_bam_paths))
 
     if len(expected_to_be_available_bam_paths - actually_available_bam_paths) > 0:
         message = "ERROR: expected_to_be_available_bam_paths - actually_available_bam_paths: %s" % str(
@@ -90,7 +89,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
         raise Exception(message)
 
     logging.info("Processing %d expected (%d existing) bams in %s/%s/%s" % (
-        len(expected_variants), len(actually_available_bam_paths), temp_dir, chrom, hash_dir))
+        len(expected_variants), len(actually_available_bam_paths), output_dir, chrom, hash_dir))
 
     # actually combine the bams. As confirmed above, the intersection of the 2 sets is identical to the expected_to_be_available_bam_paths set.
     print("Expected bams: " + str(list(expected_to_be_available_bam_paths)[0:5]))
@@ -109,7 +108,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
         obam = None
         for ibam_path in ibam_paths:
             try:
-                ibam = pysam.AlignmentFile(os.path.join(temp_dir, ibam_path), "rb")
+                ibam = pysam.AlignmentFile(os.path.join(output_dir, ibam_path), "rb")
 
                 if obam is None:
                     header = {
@@ -176,7 +175,7 @@ def combine_bams(temp_dir, chrom, position_hash, force=False):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Generates combined bams")
-    p.add_argument("-d", "--temp-dir", help="the top-level temp directory", default=BAM_OUTPUT_DIR)
+    p.add_argument("-d", "--output-dir", help="the top-level output directory", default=BAM_OUTPUT_DIR)
     p.add_argument("-f", "--force", help="Regenerate combined .bam and sqlite .db even they already exist", action="store_true")
     p.add_argument("--chrom", help="optional chromosome", required=True)
     g = p.add_argument_group()
@@ -195,11 +194,11 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     if args.position_hash is not None:
-        combine_bams(args.temp_dir, args.chrom, args.position_hash, force=args.force)
+        combine_bams(args.output_dir, args.chrom, args.position_hash, force=args.force)
     elif args.start_pos is not None and args.end_pos is not None:
         for position_hash in range(args.start_pos, args.end_pos+1):
             logging.info("-------")
-            combine_bams(args.temp_dir, args.chrom, position_hash, force=args.force)
+            combine_bams(args.output_dir, args.chrom, position_hash, force=args.force)
     else:
         p.error("Must specify -k or both -k1 and -k2")
 
