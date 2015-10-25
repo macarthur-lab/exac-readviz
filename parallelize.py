@@ -24,9 +24,12 @@ import datetime
 import os
 import peewee
 import playhouse.pool
+import getpass
 import random
 import slugify
 import subprocess
+import sys
+
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -79,6 +82,7 @@ class ParallelIntervals(peewee.Model):
     priority = peewee.IntegerField(null=True, index=True)  # lower is better
 
     # execution environment stats
+    username = peewee.CharField(null=True, max_length=100)
     machine_hostname = peewee.CharField(null=True, max_length=100)
     machine_average_load = peewee.FloatField(null=True)
 
@@ -183,9 +187,10 @@ if is_startup:
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # run several times
-        #subprocess.check_call(launch_array_job_cmd, shell=True)
-        #subprocess.check_call(launch_array_job_cmd, shell=True)
-        #subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
+        subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # TODO run loop that restarts array jobs
 
@@ -236,6 +241,9 @@ if not is_startup or args.run_local:
             current_interval.unique_id = unique_8_digit_id
             current_interval.started = 1
             current_interval.started_date = started_date
+            current_interval.username = getpass.getuser()
+            current_interval.machine_hostname = os.getenv('HOSTNAME', '')[0:100]
+            current_interval.machine_average_load = os.getloadavg()[-1]
             current_interval.save()
 
         cmd = "%s --chrom %s --start-pos %s --end-pos %s" % (args.command,
@@ -246,7 +254,7 @@ if not is_startup or args.run_local:
             cmd_output = subprocess.check_output(cmd.split(" "), stderr=subprocess.STDOUT).decode()
             for line in cmd_output.split("\n"):
                 logging.info("      %s" % line.strip())
-            if "generate_HC_bams finished" not in cmd_output:
+            if "generate_HC_bams finished" not in cmd_output and "-- interval finished --" not in cmd_output:
                 raise subprocess.CalledProcessError(100, cmd, cmd_output)
         except subprocess.CalledProcessError as e:
             error_message = ("%s\n"
@@ -257,10 +265,6 @@ if not is_startup or args.run_local:
             current_interval.save()
             logging.info("interval: %s:%s-%s - failed: %s" % (current_interval.chrom, current_interval.start_pos, current_interval.end_pos, error_message))
         else:
-            # execution environment stats
-            current_interval.machine_hostname = os.getenv('HOSTNAME', '')[0:100]
-            current_interval.machine_average_load = os.getloadavg()[-1]
-
             # finished
             current_interval.finished = 1
             current_interval.finished_date = datetime.datetime.now()
