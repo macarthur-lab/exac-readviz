@@ -21,6 +21,7 @@ ERROR_HC_CRASHED = 2000
 ERROR_GVCF_MISMATCH = 3000
 ERROR_REASSEMBLED_BAM_IS_EMPTY = 4000
 
+MAX_LINUX_FILENAME_LENGTH = 280
 
 def run_haplotype_caller(
         chrom,
@@ -101,7 +102,7 @@ def run_haplotype_caller(
     dash_L_intervals = list(itertools.chain.from_iterable(
         [('-L', str(interval)) for interval in left_i + [i] + right_i]))
 
-    files_to_delete_on_error = [temp_output_bam_path, temp_output_bam_path.replace(".bam",".bai")]
+    files_to_delete_on_error = [temp_output_bam_path]
     if not sr.is_missing_original_gvcf:
         temp_output_gvcf_path = os.path.join(all_bam_output_dir, relative_output_dir, "tmp." + os.path.basename(sr.output_bam_path.replace(".bam", "") + ".gvcf"))
         files_to_delete_on_error += [temp_output_gvcf_path, temp_output_gvcf_path+".idx"]
@@ -117,14 +118,15 @@ def run_haplotype_caller(
 
     # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
     gatk_cmd = [
-        "java",
+       "java",
         "-XX:+UseSerialGC",
         "-XX:+ReduceSignalUsage",
         "-XX:+UseSerialGC",
         "-XX:CICompilerCount=1",
         "-XX:+DisableAttachMechanism",
+        "-XX:MaxHeapSize=512m",
         #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
-        "-Xmx6500m",
+        "-Xmx15g",
         '-jar', '/humgen/gsa-hpprojects/dev/gauthier/scratch/noMQ0sInBamout/GenomeAnalysisTK.jar',
         '-T', 'HaplotypeCaller',
         '-R', "/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta",
@@ -144,9 +146,10 @@ def run_haplotype_caller(
         '--paddingAroundIndels', '300',
         '-I', original_bam_path,
         '-bamout', temp_output_bam_path,
-        #'--disable_bam_indexing',
+        '--disable_bam_indexing',
         '-o', temp_output_gvcf_path,
         #'-et', 'NO_ET',
+
     ] + list(dash_L_intervals)
 
     sr.hc_command_line = " ".join(gatk_cmd)
@@ -203,31 +206,35 @@ def run_haplotype_caller(
             run("ln -s -f %s %s" % (original_gvcf_path, symlink_path))
             run("ln -s -f %s %s" % (original_gvcf_path + ".tbi", symlink_path + ".tbi"))
 
+            # no more screenshots needed
             #take_screenshots(chrom, minrep_pos, igv_tracks, absolute_debug_dir)
 
             return (False, None)
         else:
-            run("rm %s" % temp_output_gvcf_path)
-            run("rm %s" % (temp_output_gvcf_path+".idx"))
+            run("rm -f %s" % temp_output_gvcf_path)
+            run("rm -f %s" % (temp_output_gvcf_path+".idx"))
 
+    logging.info("%s-%s-%s-%s %s - %s - post-processing bams" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_id))
     # postprocess and move output bam from temp_output_bam_path to output_bam_path
     # strip out read groups, read ids, tags, etc. to remove any sensitive info and reduce bam size
     final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
 
+    run("rm -f %s" % final_output_bam_path)
     (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes) = retry_if_IOError(
         postprocess_bam, temp_output_bam_path, final_output_bam_path)
 
-    run("rm %s" % temp_output_bam_path)
+    run("rm -f %s" % temp_output_bam_path)
 
     if is_reassembled_bam_empty:
         logging.info("%s-%s-%s-%s - %s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id, "reassembled bam is empty"))
 
-        files_to_delete_on_error[0] = final_output_bam_path
-        files_to_delete_on_error[1] = final_output_bam_path+".bai"
+        files_to_delete_on_error.append( final_output_bam_path )
+        files_to_delete_on_error.append( final_output_bam_path+".bai" )
         hc_failed(ERROR_REASSEMBLED_BAM_IS_EMPTY, sr.hc_command_line, sr, files_to_delete_on_error)
         return (False, None)
     else:
-        run("mv -f %s %s" % (temp_output_bam_path.replace(".bam", ".bai"), final_output_bam_path.replace(".bam", ".bai")))
+        pass
+        #run("mv -f %s %s" % (temp_output_bam_path.replace(".bam", ".bai"), final_output_bam_path.replace(".bam", ".bai")))
         #run("samtools index %s" % output_bam_path)
 
     sr.finished = 1
@@ -245,11 +252,13 @@ def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_ho
 
     output_dir = "%s/%03d" % (chrom, minrep_pos % NUM_OUTPUT_DIRECTORIES_L1) # minrep_pos % NUM_OUTPUT_DIRECTORIES_L2)
 
+    max_allele_size = min(MAX_ALLELE_SIZE, MAX_LINUX_FILENAME_LENGTH - 40)
+
     output_bam_filename = "chr%s-%s-%s-%s_%s%s%s.bam" % (
         chrom,
         minrep_pos,
-        minrep_ref[:MAX_ALLELE_SIZE],
-        minrep_alt[:MAX_ALLELE_SIZE],
+        minrep_ref[:max_allele_size],
+        minrep_alt[:max_allele_size],
         het_or_hom,
         sample_i,
         suffix)
@@ -268,7 +277,7 @@ def run(command, verbose=False):
 _missing_files_cache = set()  # used to speed up the does_file_exist(..) method
 
 def retry_if_IOError(f, *args, **kwargs):
-    num_retries = 3
+    num_retries = 6
     for retry_counter in range(num_retries):
         try:
             return f(*args, **kwargs)
@@ -276,7 +285,7 @@ def retry_if_IOError(f, *args, **kwargs):
             err = e
             time.sleep(1)
         except Exception as e:
-            raise e  # some other error occured, so just raise it
+            raise e  # some other error occurred, so just raise it
     raise err  # all retries failed
 
 
@@ -307,4 +316,4 @@ def hc_failed(error_code, message, sample_record, files_to_delete=None):
     if files_to_delete:
         for path in files_to_delete:
             if os.path.isfile(path):
-                run("rm %s" % path)
+                run("rm -f %s" % path)
