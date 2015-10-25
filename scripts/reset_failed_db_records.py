@@ -117,7 +117,6 @@ if reset_unfinished_intervals_in_important_genes:
 
 
 
-
 """
 +---------------------+--------------+------+-----+---------+----------------+
 | Field               | Type         | Null | Key | Default | Extra          |
@@ -193,6 +192,7 @@ if reset_intervals_that_contain_unfinished_variants:
         #            "job_id=NULL, task_id=NULL, unique_id=NULL, started=0, "
         #            "started_date=NULL, finished=0, finished_date=NULL, "
         #            "error_code=500, error_message=NULL where finished=0 and started_date <")
+
 print("Done")
 
 
