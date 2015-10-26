@@ -1,20 +1,36 @@
-import gzip
+"""
+This script updates database records  in the interval, variant, sample tables to
+recover from various kinds of transient errors fixable errors
+such as cluster filesystem problems, some previously-generated files being deleted, etc.
+"""
+
 import os
-import sys
 from mysql.connector import MySQLConnection
 
-set_intervals_where_all_intervals_have_finished = 0
-reset_missing_bams_that_actually_exist = 0
-reset_samples_with_transient_errors = 0
+
+# initialize flags that control which sections are actually executed
+reset_variants_with_transient_errors = 0
+reset_variants_with_fewer_than_expected_available_samples = 0
+reset_variants_with_original_bams_marked_missing_due_to_transient_error = 0
+reset_variants_with_bams_in_db_but_not_on_disk = 0
+set_intervals_where_all_contained_varaints_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
 reset_intervals_that_contain_unfinished_variants = 0
 reset_intervals_that_had_error_code = 0
 allow_unifinished_intervals_to_be_rerun = 0
+run_stat_queries = 0
+
+# set flags to execute particular sections of code
+#reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
+reset_variants_with_transient_errors = 1
+reset_variants_with_fewer_than_expected_available_samples = 1
+reset_variants_with_bams_in_db_but_not_on_disk = 1
+reset_intervals_that_contain_unfinished_variants = 1
+reset_intervals_that_had_error_code = 1
+allow_unifinished_intervals_to_be_rerun = 1
 
 
-
-
-print("Connecting to db")
+print("connecting to db")
 conn = MySQLConnection(user='root', host='exac-dev', port=3307, database='exac_readviz')
 c = conn.cursor(buffered=True)
 
@@ -63,7 +79,8 @@ def run_query(q):
 """
 
 
-if reset_missing_bams_that_actually_exist:
+if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
+    print("=== reset_variants_with_original_bams_marked_missing_due_to_transient_error ===")
     print("step 1: Find bams that caused a file-doesn't-exist error, but actually do exist")
     c.execute("select distinct original_bam_path from sample where hc_error_code=1000")
     all_original_bam_paths = list(c.fetchall())
@@ -74,29 +91,31 @@ if reset_missing_bams_that_actually_exist:
     print("Found %d such bams. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
     run_query(("update variant as v join sample as s on "
               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
-              "set v.finished=0, s.hc_error_code=s.hc_error_code+10 "
-              "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and s.hc_error_code=1000 and s.original_bam_path IN %s") % str(found_bam_paths))
+              "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
+              "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
+              "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
 
     run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
-               "set s.finished=0 where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and s.hc_error_code=1000 and s.original_bam_path IN %s") % str(found_bam_paths))
+               "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
+               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples "
+               "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
 
 
 
-
-if reset_samples_with_transient_errors:
-
+if reset_variants_with_transient_errors:
+    print("=== reset_variants_with_transient_errors ===")
     print("For *samples* with transient errors, reset them to finished=0")
     run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
-               "set s.finished=0, s.hc_error_code=NULL, s.hc_error_text=NULL "
+               "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
                "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
     print("For *variants* with transient errors, reset them to finished=0")
     run_query(("update variant as v join sample as s on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
-               "set v.finished=0 "
+               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
                "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
@@ -106,7 +125,7 @@ ALL_CHROMS = list(map(str, [10,11,12,13,14,15,16,17,18,19,20,21,22, 1,2,3,4,5,6,
 
 # reset unfinished intervals not in top genes and not in genomic regions
 if reset_unfinished_intervals_in_important_genes:
-
+    print("=== reset_unfinished_intervals_in_important_genes ===")
     print("Reset intervals in important genes")
     sql_is_overlapping = []
     with open(os.path.join(os.path.abspath(os.path.dirname(__file__)),  "data/top_intervals.txt")) as f:
@@ -129,43 +148,47 @@ if reset_unfinished_intervals_in_important_genes:
 
 
 
+if run_stat_queries or set_intervals_where_all_contained_varaints_have_finished or reset_intervals_that_contain_unfinished_variants:
+    """
+    +---------------------+--------------+------+-----+---------+----------------+
+    | Field               | Type         | Null | Key | Default | Extra          |
+    +---------------------+--------------+------+-----+---------+----------------+
+    | id                  | int(11)      | NO   | PRI | NULL    | auto_increment |
+    | chrom               | varchar(5)   | NO   | MUL | NULL    |                |
+    | pos                 | int(11)      | NO   |     | NULL    |                |
+    | ref                 | varchar(500) | NO   |     | NULL    |                |
+    | alt                 | varchar(500) | NO   |     | NULL    |                |
+    | het_or_hom          | varchar(3)   | NO   |     | NULL    |                |
+    | finished            | tinyint(1)   | NO   |     | NULL    |                |
+    | n_expected_samples  | int(11)      | YES  |     | NULL    |                |
+    | n_available_samples | int(11)      | YES  |     | NULL    |                |
+    | readviz_bam_paths   | longtext     | YES  |     | NULL    |                |
+    +---------------------+--------------+------+-----+---------+----------------+
+    """
 
-"""
-+---------------------+--------------+------+-----+---------+----------------+
-| Field               | Type         | Null | Key | Default | Extra          |
-+---------------------+--------------+------+-----+---------+----------------+
-| id                  | int(11)      | NO   | PRI | NULL    | auto_increment |
-| chrom               | varchar(5)   | NO   | MUL | NULL    |                |
-| pos                 | int(11)      | NO   |     | NULL    |                |
-| ref                 | varchar(500) | NO   |     | NULL    |                |
-| alt                 | varchar(500) | NO   |     | NULL    |                |
-| het_or_hom          | varchar(3)   | NO   |     | NULL    |                |
-| finished            | tinyint(1)   | NO   |     | NULL    |                |
-| n_expected_samples  | int(11)      | YES  |     | NULL    |                |
-| n_available_samples | int(11)      | YES  |     | NULL    |                |
-| readviz_bam_paths   | longtext     | YES  |     | NULL    |                |
-+---------------------+--------------+------+-----+---------+----------------+
-"""
-# parallelize.python3_4_generate_HC_bams_py_i200
-# get all intervals
-from collections import defaultdict
-all_intervals = defaultdict(set)
-c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from parallelize.python3_4_generate_HC_bams_py_i200") #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
-for chrom, start_pos, end_pos, started, finished, error_code in c:
-    all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
+    # parallelize.python3_4_generate_HC_bams_py_i200
+    # get all intervals
+    from collections import defaultdict
+    all_intervals = defaultdict(set)
+    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from parallelize.python3_4_generate_HC_bams_py_i200") #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+    for chrom, start_pos, end_pos, started, finished, error_code in c:
+        all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
 
 
-total = 0
-for chrom in all_intervals:
-    total += len(all_intervals[chrom])
-    print("%s: %s intervals" % (chrom, len(all_intervals[chrom])))
-print("total: %s intervals" % total)
+    total = 0
+    for chrom in all_intervals:
+        total += len(all_intervals[chrom])
+        print("%s: %s intervals" % (chrom, len(all_intervals[chrom])))
+    print("total: %s intervals" % total)
 
 
 
 # set intervals as finished if all variants in them are finished
-if set_intervals_where_all_intervals_have_finished:
-    print("Doing set_intervals_where_all_intervals_have_finished")
+if set_intervals_where_all_contained_varaints_have_finished:
+    # unlike the other recovery code
+    # this is useful for rebuilding the intervals table from scratch by setting
+    # each interval record to finished if all variants it contains are finished
+    print("=== set_intervals_where_all_contained_varaints_have_finished ===")
     for current_chrom in ALL_CHROMS:
         #all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
         for _, start_pos, end_pos, _, _, _ in all_intervals[current_chrom]:
@@ -176,11 +199,52 @@ if set_intervals_where_all_intervals_have_finished:
                 run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set job_id=1, started=1, finished=1 "
                            "where chrom='%(current_chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
+if reset_variants_with_fewer_than_expected_available_samples:
+    print("=== reset_variants_with_fewer_than_expected_available_samples ===")
+    # Reset variants to finished = 0 where number of records in the sample table that either succeeded or had an error is < n_expected_samples
+    run_query("update exac_readviz.variant as v "
+              "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
+              "where n_available_samples<n_expected_samples and "
+              "n_expected_samples > ("
+              " select count(*) from sample as s where chrom=v.chrom and pos=v.pos and alt=v.alt and het_or_hom=v.het_or_hom and (hc_succeeded=1 or hc_error_code>0)"
+              ")")
 
-# reset intervals marked as finished
-if reset_intervals_that_contain_unfinished_variants:
+    # Reset variants to finished = 0 where the variant.n_available_samples < records in the sample table that have hc_succeeded=1
+    run_query("update exac_readviz.variant as v "
+              "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
+              "where n_available_samples<n_expected_samples and n_available_samples < ("
+              "  select count(*) from sample as s where chrom=v.chrom and pos=v.pos and ref=v.ref and alt=v.alt and het_or_hom=v.het_or_hom and hc_succeeded=1"
+              ")")
+
+if reset_variants_with_bams_in_db_but_not_on_disk:
+    print("=== reset_variants_with_bams_in_db_but_not_on_disk ===")
+    import glob
+    os.chdir("/broad/hptmp/exac_readviz_backend2/")
     for current_chrom in ALL_CHROMS:
-        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and finished=0 order by pos asc" % locals()) #" and chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+        print("globbing for all bam files in chr%s" % current_chrom)
+        actual_files_on_disk = set(glob.glob(current_chrom +"/*/chr*.bam"))
+        for t in run_query("select readviz_bam_paths, chrom, pos, ref, alt, het_or_hom from exac_readviz.variant "
+                           "where chrom='%(current_chrom)s' and finished=1 and n_available_samples>0" % locals()).fetchall():
+            cached_filenames_list = t[0].split('|')
+            cached_filenames_set = set(cached_filenames_list)
+            duplicates_found = len(cached_filenames_set) < len(cached_filenames_list)
+            some_cached_files_not_found_on_disk = len(cached_filenames_set - actual_files_on_disk) > 0
+            if duplicates_found or some_cached_files_not_found_on_disk:
+                if some_cached_files_not_found_on_disk:
+                    print('readviz_bam_paths that are no longer found on disk: %s ' % str(cached_filenames_set - actual_files_on_disk))
+                else:
+                    print('duplicates_found: %s' % str(cached_filenames_list))
+                run_query("update exac_readviz.variant as v "
+                          "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
+                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom='%s' " % t[1:])
+                run_query("update exac_readviz.sample as v "
+                          "set v.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
+                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom='%s' " % t[1:])
+
+if reset_intervals_that_contain_unfinished_variants:
+    print("=== reset_intervals_that_contain_unfinished_variants ===")
+    for current_chrom in ALL_CHROMS:
+        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and v.finished=0 order by pos asc" % locals()) #" and chrom in %(FINISHED_CHROMOSOMES)s" % locals())
         all_unfinished_variants = c.fetchall()
 
         unfinished_intervals_marked_as_finished = set()
@@ -219,10 +283,13 @@ if reset_intervals_that_contain_unfinished_variants:
         #            "started_date=NULL, finished=0, finished_date=NULL, "
         #            "error_code=500, error_message=NULL where finished=0 and started_date <")
 
+
 if reset_intervals_that_had_error_code:
+    print("=== reset_intervals_that_had_error_code ===")
     run_query("update parallelize.python3_4_generate_HC_bams_py_i200 set finished=0 where error_code > 0")
 
 if allow_unifinished_intervals_to_be_rerun:
+    print("=== allow_unifinished_intervals_to_be_rerun ===")
     run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
               "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where finished=0")
