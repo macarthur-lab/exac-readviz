@@ -42,10 +42,13 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
         force: proceed even if the .bam and .db are already there on disk.
     """
 
+    # create combined_bams output sub-directory
     hash_dir = "%03d" % (position_hash % 1000)
 
     obam_path = os.path.join(output_dir, "combined_bams", chrom, "_tmp.combined_chr%s_%s.bam" % (chrom, hash_dir))
     sorted_bam_path = obam_path.replace("_tmp.", "")
+
+    run("mkdir -m 777 -p " + os.path.dirname(obam_path))
 
     sqlite_db_path = os.path.basename(obam_path.replace(".bam", ".db"))
     final_sqlite_db_path = sorted_bam_path.replace(".bam", ".db")
@@ -57,46 +60,49 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
             logging.info("%s found on disk. size=%s. Skipping..." % (sorted_bam_path, sorted_bam_file_size))
             return
 
-    expected_variants = [v for v in peewee.RawQuery(Variant,  (
+    finished_variants = [v for v in peewee.RawQuery(Variant,  (
         "select * from variant where chrom='%s' and pos %%%% 1000 = %s and finished=1") % (
         chrom, position_hash)).execute()]
 
-    num_expected_to_be_available_bams = sum([v.n_available_samples for v in expected_variants if v.n_available_samples])
-    logging.info("num_expected_to_be_available_bams = %(num_expected_to_be_available_bams)s (from the database)" % locals())
-
     # check number of expected variants
-    expected_to_be_available_bam_paths = set()
-    for v in expected_variants:
+    available_bam_paths_based_on_db = set()
+    for v in finished_variants:
         if v.n_available_samples:
-            expected_to_be_available_bam_paths.update(v.readviz_bam_paths.split("|"))
+            readviz_bam_paths = v.readviz_bam_paths.split("|")
+
+            if len(readviz_bam_paths) != v.n_available_samples:
+                logging.error("ERROR: n_available_samples:%s doesn't match bam paths: %s" % (v.n_available_samples, str(readviz_bam_paths)))
+
+            if len(readviz_bam_paths) > len(set(readviz_bam_paths)):
+                logging.error("ERROR: %s duplicate readviz bam paths: %s" % (len(readviz_bam_paths) - len(set(readviz_bam_paths)), str(readviz_bam_paths)))
+            available_bam_paths_based_on_db.update(readviz_bam_paths)
 
     # check how many are actually on disk
     actually_available_bam_paths = set(glob.glob(os.path.join(output_dir, chrom, hash_dir, 'chr*.bam')))
 
-    num_actually_available_bams = len(actually_available_bam_paths)
-    logging.info("num_actually_available_bams = %(num_actually_available_bams)s (from looking on disk)" % locals())
+    logging.info("num_actually_available_bams = %s (from looking on disk)" % len(actually_available_bam_paths))
 
-    if num_expected_to_be_available_bams > len(actually_available_bam_paths):
-        logging.error("ERROR: %(num_expected_to_be_available_bams)s > %(num_actually_available_bams)s " % locals())
+    if len(available_bam_paths_based_on_db) > len(actually_available_bam_paths):
+        logging.error("ERROR: len(available_bam_paths_based_on_db) > len(actually_available_bam_paths): "
+                      "%s > %s " % (len(available_bam_paths_based_on_db), len(actually_available_bam_paths)))
 
-    # make sure that all of the expected_to_be_available_bam_paths are actually available
-    actually_available_bam_paths = set(map(lambda p: p.replace(output_dir, ""), actually_available_bam_paths))
-
-    if len(expected_to_be_available_bam_paths - actually_available_bam_paths) > 0:
-        message = "ERROR: expected_to_be_available_bam_paths - actually_available_bam_paths: %s" % str(
-            expected_to_be_available_bam_paths - actually_available_bam_paths)
+    # make sure that all of the available_bam_paths_based_on_db are in the actually_available_bam_paths set
+    actually_available_bam_paths = set(map(lambda p: p.replace(output_dir, ""), actually_available_bam_paths))  # make the paths relative
+    if len(available_bam_paths_based_on_db - actually_available_bam_paths) > 0:
+        message = "ERROR: available_bam_paths_based_on_db - actually_available_bam_paths: %s" % str(
+            available_bam_paths_based_on_db - actually_available_bam_paths)
         logging.error(message)
         raise Exception(message)
 
-    logging.info("Processing %d expected (%d existing) bams in %s/%s/%s" % (
-        len(expected_variants), len(actually_available_bam_paths), output_dir, chrom, hash_dir))
+    logging.info("processing %d expected (%d existing) bams in %s/%s/%s" % (
+        len(available_bam_paths_based_on_db), len(actually_available_bam_paths), output_dir, chrom, hash_dir))
 
-    # actually combine the bams. As confirmed above, the intersection of the 2 sets is identical to the expected_to_be_available_bam_paths set.
-    print("Expected bams: " + str(list(expected_to_be_available_bam_paths)[0:5]))
-    print("Available bams: " + str(list(actually_available_bam_paths)[0:5]))
-    ibam_paths = list(expected_to_be_available_bam_paths & actually_available_bam_paths)
+    # actually combine the bams. As confirmed above, the intersection of the 2 sets is identical to the available_bam_paths_based_on_db set.
+    #logging.info("Expected - 1st 5 bams: " + str(list(available_bam_paths_based_on_db)[0:5]))
+    #logging.info("Available - 1st 5 bams: " + str(list(actually_available_bam_paths)[0:5]))
+    ibam_paths = list(available_bam_paths_based_on_db & actually_available_bam_paths)
 
-    logging.info("Combining %s bams into %s" % (len(ibam_paths), obam_path))
+    logging.info("combining %s bams into %s" % (len(ibam_paths), obam_path))
     if len(ibam_paths) > 0:
         # sort bams by position so that the reads in the combined file are roughly in sorted order
         sorted_bam_paths = sorted(ibam_paths, key=lambda ibam_path: int(bam_path_to_dict(ibam_path)['pos']))
@@ -143,9 +149,9 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
         run("rm %(obam_path)s" % locals())
 
     # create a combined_chr<chrom>_<hash>.db sqlite database that the website code can use to understand whats in the combined file
-    logging.info("Populating sqlite database: " + sqlite_db_path)
+    logging.info("populating sqlite database: " + sqlite_db_path)
     if os.path.isfile(sqlite_db_path):
-        run("rm " + sqlite_db_path)
+        run("rm -f " + sqlite_db_path)
 
     sqlite_db = peewee.SqliteDatabase(sqlite_db_path, autocommit=False)
     class t(Variant):
@@ -160,7 +166,7 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
     # copy the records from the Variant table used by generate_HC_bams.py
     sqlite_db.connect()
     with sqlite_db.atomic():
-        for v in expected_variants:  #Variant.select().where(Variant.finished==1).dicts():
+        for v in finished_variants:  #Variant.select().where(Variant.finished==1).dicts():
             d = shortcuts.model_to_dict(v)
 
             # delete readviz_bam_paths as they're no longer relevant because the data from these is being combined into one bam file
