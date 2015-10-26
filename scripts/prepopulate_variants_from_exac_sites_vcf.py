@@ -35,7 +35,7 @@ parse_vcf_row = create_vcf_row_parser(last_header_line)
 
 counters = collections.defaultdict(int)
 for row in vcf_iterator:
-    chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, all_genotypes_in_row = parse_vcf_row(row)
+    chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, n_hemi_list, all_genotypes_in_row = parse_vcf_row(row)
     counters["sites"] += 1
 
     # iterate over alt alleles (in case this row is multi-allelic)

@@ -61,9 +61,17 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
         m = re.search("AC_Adj=([\d,]+);.*AC_Hom=([\d,]+);", info)
         assert m, "%s:%s: AC_Adj=([\d,]+);AC_Hom=([\d,]+); not found in %s" % (chrom, pos, info)
 
-        ac_adj_list = list(map(int, m.group(1).split(",")))
-        n_hom_list = list(map(int, m.group(2).split(",")))
-        n_het_list = list(map(lambda t: t[0] - t[1]*2, zip(ac_adj_list, n_hom_list)))
+        ac_adj_list = tuple(map(int, m.group(1).split(",")))
+        n_hom_list = tuple(map(int, m.group(2).split(",")))
+
+        # handle AC_Hemi
+        if chrom in ("X", "Y"):
+            m = re.search("AC_Hemi=([\d,]+);", info)
+            n_hemi_list = tuple(map(int, m.group(1).split(",")))
+        else:
+            n_hemi_list = tuple([0]*len(ac_adj_list))
+
+        n_het_list = list(map(lambda t: t[0] - t[1]*2 - t[2], zip(ac_adj_list, n_hom_list, n_hemi_list)))
 
         assert len(n_het_list) == len(alt_list), "%s:%s: Unexpected number of AC_Het: %s - %s" % (chrom, pos, n_het_list, "\t".join(fields[0:9]))
         assert len(n_hom_list) == len(alt_list), "%s:%s: Unexpected number of AC_Hom: %s - %s" % (chrom, pos, n_hom_list, "\t".join(fields[0:9]))
@@ -90,10 +98,11 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                         gt_ref = int(gt_ref)
                         gt_alt = int(gt_alt)
 
+                        assert gt_ref <= len(alt_list) and gt_alt <= len(alt_list), "ERROR: %s:%s - genotype numbers %s out of bounds in %s" % (chrom, pos, GT, fields[0:8])
+
                     except ValueError:
                         logging.error("ERROR: %s:%s - couldn't parse genotype %s in %s" % (chrom, pos, GT, fields[0:8]))
-
-                    assert gt_ref <= len(alt_list) and gt_alt <= len(alt_list), "ERROR: %s:%s - genotype numbers %s out of bounds in %s" % (chrom, pos, GT, fields[0:8])
+                        gt_ref = gt_alt = None
 
                     try:
                         GQ = float(genotype_values[GQ_idx])
@@ -107,6 +116,6 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                 sample_id_to_genotype[sample_id] = (gt_ref, gt_alt, GQ, DP)
 
 
-        return chrom, pos, ref, alt_list, n_het_list, n_hom_list, sample_id_to_genotype
+        return chrom, pos, ref, alt_list, n_het_list, n_hom_list, n_hemi_list, sample_id_to_genotype
 
     return vcf_row_parser

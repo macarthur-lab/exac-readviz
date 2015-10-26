@@ -87,10 +87,10 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
     for row in vcf_iterator:
         counters["sites"] += 1
 
-        chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, all_genotypes_in_row = parse_vcf_row(row)
+        chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, n_hemi_list, all_genotypes_in_row = parse_vcf_row(row)
 
         # iterate over alt alleles (in case this row is multi-allelic)
-        for alt_allele_index, (alt, n_het, n_hom) in enumerate(zip(alt_alleles, n_het_list, n_hom_list)):
+        for alt_allele_index, (alt, n_het, n_hom, n_hemi) in enumerate(zip(alt_alleles, n_het_list, n_hom_list, n_hemi_list)):
 
             minrep_pos, minrep_ref, minrep_alt = get_minimal_representation(
                 pos, ref, alt)
@@ -113,7 +113,8 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     het_or_hom=het_or_hom)
 
                 if vr.finished:
-                    logging.info("%s-%s-%s-%s %s - already done - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom))
+                    logging.info("%s-%s-%s-%s %s - already done (%s out of %s available) - skipping.." % (
+                        chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, vr.n_available_samples, vr.n_expected_samples))
                     counters[het_or_hom+"_alleles_already_done"] += 1
                     continue
 
