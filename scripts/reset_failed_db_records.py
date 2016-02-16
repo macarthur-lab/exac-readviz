@@ -17,17 +17,17 @@ set_intervals_where_all_contained_varaints_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
 reset_intervals_that_contain_unfinished_variants = 0
 reset_intervals_that_had_error_code = 0
-allow_unifinished_intervals_to_be_rerun = 0
+reset_unifinished_intervals_to_clear_job_id = 0
 run_stat_queries = 0
 
 # set flags to execute particular sections of code
 #reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
-reset_variants_with_transient_errors = 1
-reset_variants_with_fewer_than_expected_available_samples = 1
+#reset_variants_with_transient_errors = 1
+#reset_variants_with_fewer_than_expected_available_samples = 1
 reset_variants_with_bams_in_db_but_not_on_disk = 1
 reset_intervals_that_contain_unfinished_variants = 1
 reset_intervals_that_had_error_code = 1
-allow_unifinished_intervals_to_be_rerun = 1
+#reset_unifinished_intervals_to_clear_job_id = 1
 
 
 print("connecting to db")
@@ -86,9 +86,7 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
     all_original_bam_paths = list(c.fetchall())
     print("Found %d distinct bams that caused 1000 error" % len(all_original_bam_paths))
     found_bam_paths = tuple([p[0] for p in all_original_bam_paths if os.path.isfile(p[0])])
-
-
-    print("Found %d such bams. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
+    print("Of these, %d actually exist on disk. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
     run_query(("update variant as v join sample as s on "
               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
@@ -98,7 +96,6 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
     run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
                "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
-               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples "
                "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
 
 
@@ -275,7 +272,8 @@ if reset_intervals_that_contain_unfinished_variants:
             chrom = i[0]
             start_pos = i[1]
             end_pos = i[2]
-            run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set finished=0 "
+            run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 "
+                       "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
                        "where chrom='%(chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
         #print_query("update parallelize.python3_4_generate_HC_bams_py_i200 set "
@@ -286,10 +284,12 @@ if reset_intervals_that_contain_unfinished_variants:
 
 if reset_intervals_that_had_error_code:
     print("=== reset_intervals_that_had_error_code ===")
-    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 set finished=0 where error_code > 0")
+    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
+              "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
+              "where error_code > 0")
 
-if allow_unifinished_intervals_to_be_rerun:
-    print("=== allow_unifinished_intervals_to_be_rerun ===")
+if reset_unifinished_intervals_to_clear_job_id:
+    print("=== reset_unifinished_intervals_to_clear_job_id ===")
     run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
               "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where finished=0")
