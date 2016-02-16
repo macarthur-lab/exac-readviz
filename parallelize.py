@@ -192,7 +192,14 @@ if is_startup:
         subprocess.check_call(launch_array_job_cmd, shell=True)
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
-        # TODO run loop that restarts array jobs
+        # TODO run loop that restarts array jobs, and also does error recovery
+        # to reset unfinished task from jobs that have finished
+        # also, compute worst time and exit task before 3 hours is up so job doesn't get killed
+        # since job restarts are cheap
+
+
+
+
 
 if not is_startup or args.run_local:
     # this instance of parallelize.py is running as one of many array job tasks.
