@@ -1,3 +1,8 @@
+if [ ! -d /humgen/atgu1/fs03 ]; then
+    echo "/humgen/atgu1/fs03 not found. Exiting.."
+    exit -1
+fi
+
 export TERM=xterm
 source /broad/software/scripts/useuse
 reuse UGER
