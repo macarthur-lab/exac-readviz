@@ -36,9 +36,17 @@ def bam_path_to_read_group_id(bam_path):
     return os.path.basename(bam_path.replace("chr", "").replace(".bam", ""))
 
 
-def combine_bams(output_dir, chrom, position_hash, force=False):
+def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
     """Generates the combined bam.
     Args:
+        output_dir: the top level directory where files are stored.
+        temp_dir: a local non-NFS directory that can be used for creating /
+            modifying a SQLite database. This avoids SQLite incompatibility with
+            network drives.
+        chrom: chromosome for which to combine bams
+        position_hash: bams are divided between directories with names 000
+            through 999. This should be a number between 0 and 999 which
+            specifies which of these directories to process.
         force: proceed even if the .bam and .db are already there on disk.
     """
 
@@ -48,21 +56,15 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
     obam_path = os.path.join(output_dir, "combined_bams", chrom, "_tmp.combined_chr%s_%s.bam" % (chrom, hash_dir))
     sorted_bam_path = obam_path.replace("_tmp.", "")
 
-    run("mkdir -m 777 -p " + os.path.dirname(obam_path))
+    if not os.path.isdir(os.path.dirname(obam_path)):
+        run("mkdir -m 777 -p " + os.path.dirname(obam_path))
 
-    sqlite_db_path = os.path.basename(obam_path.replace(".bam", ".db"))
+    sqlite_db_path = os.path.join(temp_dir, os.path.basename(obam_path.replace(".bam", ".db")))
     final_sqlite_db_path = sorted_bam_path.replace(".bam", ".db")
 
-    # check if combine_bam output files already exist on disk, and skip if yes
-    if not force and os.path.isfile(sorted_bam_path) and os.path.isfile(final_sqlite_db_path):
-        sorted_bam_file_size = os.path.getsize(sorted_bam_path)
-        if sorted_bam_file_size > 1000:
-            logging.info("%s found on disk. size=%s. Skipping..." % (sorted_bam_path, sorted_bam_file_size))
-            return
-
     finished_variants = [v for v in peewee.RawQuery(Variant,  (
-        "select * from variant where chrom='%s' and pos %%%% 1000 = %s and finished=1") % (
-        chrom, position_hash)).execute()]
+        "select * from variant where chrom='%s' and pos %%%% 1000 = %s and finished=1"
+    ) % (chrom, position_hash)).execute()]
 
     # check number of expected variants
     available_bam_paths_based_on_db = set()
@@ -77,9 +79,22 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
                 logging.error("ERROR: %s duplicate readviz bam paths: %s" % (len(readviz_bam_paths) - len(set(readviz_bam_paths)), str(readviz_bam_paths)))
             available_bam_paths_based_on_db.update(readviz_bam_paths)
 
-    # check how many are actually on disk
-    actually_available_bam_paths = set(glob.glob(os.path.join(output_dir, chrom, hash_dir, 'chr*.bam')))
+    # check if combine_bam output files already exist on disk, and skip if yes
+    if not force and os.path.isfile(sorted_bam_path) and os.path.isfile(final_sqlite_db_path):
+        try:
+            ibam = pysam.AlignmentFile(sorted_bam_path, "rb")
+            num_read_groups = len(ibam.header['RG'])
+            ibam.close()
+            if num_read_groups == len(available_bam_paths_based_on_db):
+                logging.info("%s found on disk. size=%s read groups. Skipping..." % (sorted_bam_path, num_read_groups))
+                return
+        except (IOError, ValueError) as e:
+            logging.warning("WARNING: couldn't read combined file %s: %s", sorted_bam_path, e)
+            logging.warning(traceback.format_exc())
+            logging.warning("Will regenerate it..")
 
+    # check how many bams are actually on disk
+    actually_available_bam_paths = set(glob.glob(os.path.join(output_dir, chrom, hash_dir, 'chr*.bam')))
     logging.info("num_actually_available_bams = %s (from looking on disk)" % len(actually_available_bam_paths))
 
     if len(available_bam_paths_based_on_db) > len(actually_available_bam_paths):
@@ -100,7 +115,7 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
     # actually combine the bams. As confirmed above, the intersection of the 2 sets is identical to the available_bam_paths_based_on_db set.
     #logging.info("Expected - 1st 5 bams: " + str(list(available_bam_paths_based_on_db)[0:5]))
     #logging.info("Available - 1st 5 bams: " + str(list(actually_available_bam_paths)[0:5]))
-    ibam_paths = list(available_bam_paths_based_on_db & actually_available_bam_paths)
+    ibam_paths = list(map(str, available_bam_paths_based_on_db & actually_available_bam_paths))
 
     logging.info("combining %s bams into %s" % (len(ibam_paths), obam_path))
     if len(ibam_paths) > 0:
@@ -134,7 +149,7 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
                 ibam.close()
 
             except (IOError, ValueError) as e:
-                logging.error("ERROR: %s", e)
+                logging.error("ERROR on file %s: %s", ibam_path, e)
                 logging.error(traceback.format_exc())
         if obam is not None:
             obam.close()
@@ -182,7 +197,8 @@ def combine_bams(output_dir, chrom, position_hash, force=False):
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Generates combined bams")
     p.add_argument("-d", "--output-dir", help="the top-level output directory", default=BAM_OUTPUT_DIR)
-    p.add_argument("-f", "--force", help="Regenerate combined .bam and sqlite .db even they already exist", action="store_true")
+    p.add_argument("-t", "--non-nfs-temp-dir", help="local non-NFS-mounted temp directory to use for sqlite oprations", default="/tmp")
+    p.add_argument("-f", "--force", help="regenerate combined .bam and sqlite .db even they already exist", action="store_true")
     p.add_argument("--chrom", help="optional chromosome", required=True)
     g = p.add_argument_group()
     g.add_argument("-k", "--position-hash",
@@ -200,11 +216,11 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     if args.position_hash is not None:
-        combine_bams(args.output_dir, args.chrom, args.position_hash, force=args.force)
+        combine_bams(args.output_dir, args.non_nfs_temp_dir, args.chrom, args.position_hash, force=args.force)
     elif args.start_pos is not None and args.end_pos is not None:
         for position_hash in range(args.start_pos, args.end_pos+1):
             logging.info("-------")
-            combine_bams(args.output_dir, args.chrom, position_hash, force=args.force)
+            combine_bams(args.output_dir, args.non_nfs_temp_dir, args.chrom, position_hash, force=args.force)
     else:
         p.error("Must specify -k or both -k1 and -k2")
 
