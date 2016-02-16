@@ -61,12 +61,15 @@ def run_haplotype_caller(
         het_or_hom=het_or_hom,
         sample_id=sample_id)
 
-    if sr.finished:
+    output_bam_path = compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i)
+    if sr.finished and sr.output_bam_path == output_bam_path:
         #logging.info("%s-%s-%s-%s - %s - already done " % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id))
         return (sr.hc_succeeded, sr.output_bam_path)
 
     sr.hc_started_time=datetime.datetime.now()
     sr.original_bam_path = original_bam_path
+    sr.output_bam_path = output_bam_path
+
     logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id))
     if not does_file_exist(sr.original_bam_path):
         logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id, ".bam not found", original_bam_path))
@@ -90,10 +93,6 @@ def run_haplotype_caller(
 
     sr.original_gvcf_path = original_gvcf_path
     sr.is_missing_original_gvcf = not does_file_exist(sr.original_gvcf_path) or not does_file_exist(original_gvcf_path + ".tbi")
-
-    sr.output_bam_path = compute_output_bam_path(
-        chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i)
-
 
     # first, output to temp files to avoid partially-finished files if HC crashes or is killed
     relative_output_dir = os.path.dirname(sr.output_bam_path)
@@ -179,7 +178,7 @@ def run_haplotype_caller(
 
         if not gvcf_calls_matched:
             sr.finished=1
-            error_code = ERROR_GVCF_MISMATCH + mismatch_error_code # combine the 2 error codes
+            error_code = ERROR_GVCF_MISMATCH + mismatch_error_code  # combine the 2 error codes
             hc_failed(error_code, mismatch_error_text, sr)
 
             logging.info("%s-%s-%s-%s %s - %s%s - gvcfs mimatch: %s - %s" % (
@@ -224,6 +223,7 @@ def run_haplotype_caller(
         postprocess_bam, temp_output_bam_path, final_output_bam_path)
 
     run("rm -f %s" % temp_output_bam_path)
+    run("chmod 666 %s" % final_output_bam_path)  # in case different users run this script
 
     if is_reassembled_bam_empty:
         logging.info("%s-%s-%s-%s - %s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id, "reassembled bam is empty"))
