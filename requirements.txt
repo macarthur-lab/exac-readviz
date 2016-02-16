@@ -1,0 +1,6 @@
+awesome-slugify
+configargparse
+igv_plotter
+peewee
+pysam
+pyvcf
