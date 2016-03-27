@@ -6,7 +6,7 @@ such as cluster filesystem problems, some previously-generated files being delet
 
 import os
 from mysql.connector import MySQLConnection
-
+from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 # initialize flags that control which sections are actually executed
 reset_variants_with_transient_errors = 0
@@ -31,7 +31,7 @@ reset_intervals_that_had_error_code = 1
 
 
 print("connecting to db")
-conn = MySQLConnection(user='root', host='exac-dev', port=3307, database='exac_readviz')
+conn = MySQLConnection(user=DB_USER, host=DB_HOST, port=DB_PORT, database='exac_readviz')
 c = conn.cursor(buffered=True)
 
 def print_query(q):

@@ -29,7 +29,7 @@ import random
 import slugify
 import subprocess
 import sys
-
+from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -55,7 +55,7 @@ args.command = " ".join(args.command + unknown_args)
 logging.info("args: command: " + args.command)
 logging.info("db_table_name: " + db_table_name)
 
-db = playhouse.pool.PooledMySQLDatabase('parallelize', user='root', host='dmz-exac-dev.broadinstitute.org', port=3307)
+db = playhouse.pool.PooledMySQLDatabase('parallelize', user=DB_USER, host=DB_HOST, port=DB_PORT)
 
 print("Starting..")
 

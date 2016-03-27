@@ -1,7 +1,7 @@
 import gzip
-
+from utils.constants import GENCODE_EXAC_GTF_PATH
 gene_id_to_interval = {}
-with gzip.open("/humgen/atgu1/fs03/konradk/exac/exac_browser/bundle/gencode.gtf.gz") as f:
+with gzip.open(GENCODE_EXAC_GTF_PATH) as f:
     for line in f:
         line = line.decode('ascii').strip('\n')
         if line.startswith('#'):

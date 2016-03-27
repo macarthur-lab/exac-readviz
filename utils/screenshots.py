@@ -22,7 +22,6 @@ def take_screenshots(chrom, pos, file_paths, file_output_dir=None):
     logging.info("%s:%s - taking igv screenshots of %s files: %s" % (
         chrom, pos, len(file_paths), ", ".join(file_paths)))
 
-    #igv_jar_path="/home/unix/mlek/bin/IGV_plotter/IGV_2.0.35/igv.jar"
     r = igv_api.IGVCommandLineRobot(verbose=False,
                                     igv_window_width=1200,
                                     igv_window_height=1600,
