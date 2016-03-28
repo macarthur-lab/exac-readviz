@@ -61,6 +61,7 @@ for row in vcf_iterator:
                     vr.n_expected_samples = min(n_hemi, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
                 else:
                     raise ValueError("Unexpected value for het_or_hom_or_hemi: %s" % str(het_or_hom_or_hemi))
+
                 vr.save()
 
                 counters["created_alleles"] += 1

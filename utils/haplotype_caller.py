@@ -28,7 +28,7 @@ def run_haplotype_caller(
         minrep_pos,
         minrep_ref,
         minrep_alt,
-        het_or_hom,
+        het_or_hom_or_hemi,
         original_bam_path,
         original_gvcf_path,
         all_bam_output_dir,
@@ -39,7 +39,7 @@ def run_haplotype_caller(
     Args:
         chrom: chromosome
         ...
-        het_or_hom: "het" or "hom" to indicate whether this sample was originally called as HET or HOM
+        het_or_hom_or_hemi: "het" or "hom" to indicate whether this sample was originally called as HET or HOM
         original_bam_path: full path of BAM used as input in the original HC run
         original_gvcf_path:  full path of GVCF generated during the original HC run
         all_bam_output_dir: top-level output dir for all reassembled bams
@@ -58,10 +58,10 @@ def run_haplotype_caller(
         pos=minrep_pos,
         ref=minrep_ref,
         alt=minrep_alt,
-        het_or_hom=het_or_hom,
+        het_or_hom_or_hemi=het_or_hom_or_hemi,
         sample_id=sample_id)
 
-    output_bam_path = compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i)
+    output_bam_path = compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i)
     if sr.finished and sr.output_bam_path == output_bam_path:
         #logging.info("%s-%s-%s-%s - %s - already done " % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id))
         return (sr.hc_succeeded, sr.output_bam_path)
@@ -70,9 +70,9 @@ def run_haplotype_caller(
     sr.original_bam_path = original_bam_path
     sr.output_bam_path = output_bam_path
 
-    logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id))
+    logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
     if not does_file_exist(sr.original_bam_path):
-        logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id, ".bam not found", original_bam_path))
+        logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, ".bam not found", original_bam_path))
 
         sr.finished=1
         hc_failed(ERROR_ORIGINAL_BAM_NOT_FOUND, None, sr)
@@ -154,7 +154,7 @@ def run_haplotype_caller(
     sr.hc_command_line = " ".join(gatk_cmd)
 
     try:
-        logging.info("%s-%s-%s-%s %s - %s%s - launching HC %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id, " ".join(dash_L_intervals)))
+        logging.info("%s-%s-%s-%s %s - %s%s - launching HC %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, " ".join(dash_L_intervals)))
         logging.info(sr.hc_command_line)
         #os.system(" ".join(gatk_cmd))
         cmd_output = subprocess.check_output(gatk_cmd, stderr=subprocess.STDOUT).decode()
@@ -172,7 +172,7 @@ def run_haplotype_caller(
 
     # check GVCF against original GVCF call
     if not sr.is_missing_original_gvcf:
-        logging.info("%s-%s-%s-%s %s - %s%s - checking gvcfs" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id))
+        logging.info("%s-%s-%s-%s %s - %s%s - checking gvcfs" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
         gvcf_calls_matched, mismatch_error_code, mismatch_error_text = retry_if_IOError(
             check_gvcf, sr.original_gvcf_path, temp_output_gvcf_path, chrom, minrep_pos)
 
@@ -182,7 +182,7 @@ def run_haplotype_caller(
             hc_failed(error_code, mismatch_error_text, sr)
 
             logging.info("%s-%s-%s-%s %s - %s%s - gvcfs mimatch: %s - %s" % (
-                chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id, error_code, mismatch_error_text))
+                chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, error_code, mismatch_error_text))
 
             # save the output gvcf for debugging
             absolute_debug_dir = os.path.join(all_bam_output_dir, "debug", relative_output_dir)
@@ -213,7 +213,7 @@ def run_haplotype_caller(
             run("rm -f %s" % temp_output_gvcf_path)
             run("rm -f %s" % (temp_output_gvcf_path+".idx"))
 
-    logging.info("%s-%s-%s-%s %s - %s%s - post-processing bams" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id))
+    logging.info("%s-%s-%s-%s %s - %s%s - post-processing bams" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
     # postprocess and move output bam from temp_output_bam_path to output_bam_path
     # strip out read groups, read ids, tags, etc. to remove any sensitive info and reduce bam size
     final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
@@ -243,11 +243,11 @@ def run_haplotype_caller(
     sr.hc_succeeded = 1
     sr.save()
 
-    logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, sample_id, "done!"))
+    logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, "done!"))
     return (True, sr.output_bam_path)
 
 
-def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, sample_i, suffix=""):
+def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, suffix=""):
     """Computes the reassembled bam output path"""
 
     output_dir = "%s/%03d" % (chrom, minrep_pos % NUM_OUTPUT_DIRECTORIES_L1) # minrep_pos % NUM_OUTPUT_DIRECTORIES_L2)
@@ -259,7 +259,7 @@ def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_ho
         minrep_pos,
         minrep_ref[:max_allele_size],
         minrep_alt[:max_allele_size],
-        het_or_hom,
+        het_or_hom_or_hemi,
         sample_i,
         suffix)
 

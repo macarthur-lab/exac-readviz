@@ -88,13 +88,13 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
     found_bam_paths = tuple([p[0] for p in all_original_bam_paths if os.path.isfile(p[0])])
     print("Of these, %d actually exist on disk. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
     run_query(("update variant as v join sample as s on "
-              "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
+              "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
               "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
 
     run_query(("update sample as s join variant as v on "
-               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
+               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
                "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
                "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
 
@@ -104,14 +104,14 @@ if reset_variants_with_transient_errors:
     print("=== reset_variants_with_transient_errors ===")
     print("For *samples* with transient errors, reset them to finished=0")
     run_query(("update sample as s join variant as v on "
-               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
+               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
                "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
                "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
     print("For *variants* with transient errors, reset them to finished=0")
     run_query(("update variant as v join sample as s on "
-               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom=s.het_or_hom "
+               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
                "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
                "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
@@ -203,14 +203,14 @@ if reset_variants_with_fewer_than_expected_available_samples:
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
               "where n_available_samples<n_expected_samples and "
               "n_expected_samples > ("
-              " select count(*) from sample as s where chrom=v.chrom and pos=v.pos and alt=v.alt and het_or_hom=v.het_or_hom and (hc_succeeded=1 or hc_error_code>0)"
+              " select count(*) from sample as s where chrom=v.chrom and pos=v.pos and alt=v.alt and het_or_hom_or_hemi=v.het_or_hom_or_hemi and (hc_succeeded=1 or hc_error_code>0)"
               ")")
 
     # Reset variants to finished = 0 where the variant.n_available_samples < records in the sample table that have hc_succeeded=1
     run_query("update exac_readviz.variant as v "
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
               "where n_available_samples<n_expected_samples and n_available_samples < ("
-              "  select count(*) from sample as s where chrom=v.chrom and pos=v.pos and ref=v.ref and alt=v.alt and het_or_hom=v.het_or_hom and hc_succeeded=1"
+              "  select count(*) from sample as s where chrom=v.chrom and pos=v.pos and ref=v.ref and alt=v.alt and het_or_hom=v.het_or_hom_or_hemi and hc_succeeded=1"
               ")")
 
 if reset_variants_with_bams_in_db_but_not_on_disk:
@@ -220,7 +220,7 @@ if reset_variants_with_bams_in_db_but_not_on_disk:
     for current_chrom in ALL_CHROMS:
         print("globbing for all bam files in chr%s" % current_chrom)
         actual_files_on_disk = set(glob.glob(current_chrom +"/*/chr*.bam"))
-        for t in run_query("select readviz_bam_paths, chrom, pos, ref, alt, het_or_hom from exac_readviz.variant "
+        for t in run_query("select readviz_bam_paths, chrom, pos, ref, alt, het_or_hom_or_hemi from exac_readviz.variant "
                            "where chrom='%(current_chrom)s' and finished=1 and n_available_samples>0" % locals()).fetchall():
             cached_filenames_list = t[0].split('|')
             cached_filenames_set = set(cached_filenames_list)
@@ -233,10 +233,10 @@ if reset_variants_with_bams_in_db_but_not_on_disk:
                     print('duplicates_found: %s' % str(cached_filenames_list))
                 run_query("update exac_readviz.variant as v "
                           "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
-                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom='%s' " % t[1:])
+                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom_or_hemi='%s' " % t[1:])
                 run_query("update exac_readviz.sample as v "
                           "set v.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
-                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom='%s' " % t[1:])
+                          "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom_or_hemi='%s' " % t[1:])
 
 if reset_intervals_that_contain_unfinished_variants:
     print("=== reset_intervals_that_contain_unfinished_variants ===")

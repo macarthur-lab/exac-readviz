@@ -29,7 +29,7 @@ def bam_path_to_fields(bam_path):
 
 def bam_path_to_dict(bam_path):
     # for example: /read_viz/22/5822/chr22-46615822-A-G_het0.bam
-    return dict(zip(['chrom', 'pos', 'ref', 'alt', 'het_or_hom'], bam_path_to_fields(bam_path)))
+    return dict(zip(['chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'], bam_path_to_fields(bam_path)))
 
 
 def bam_path_to_read_group_id(bam_path):
@@ -173,7 +173,7 @@ def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
         class Meta:
             database = sqlite_db
             indexes = (
-                (('chrom', 'pos', 'ref', 'alt', 'het_or_hom'), True), # True means unique index
+                (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'), True), # True means unique index
             )
 
     t.create_table(fail_silently=True)

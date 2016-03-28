@@ -122,7 +122,15 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     counters[het_or_hom_or_hemi+"_alleles_already_done"] += 1
                     continue
 
-                n_expected_samples = n_het if het_or_hom_or_hemi == "het" else n_hom
+                if het_or_hom_or_hemi == "het":
+                    n_expected_samples = n_het
+                elif het_or_hom_or_hemi == "hom":
+                    n_expected_samples = n_hom
+                elif het_or_hom_or_hemi == "hemi":
+                    n_expected_samples = n_hemi
+                else:
+                    raise ValueError("Unexpected value for het_or_hom_or_hemi: %s" % str(het_or_hom_or_hemi))
+
                 if n_expected_samples == 0:
                     logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi))
                     vr.n_expected_samples=0

@@ -12,7 +12,7 @@ class T(Variant):
     class Meta:
         database = sqlite_db
         indexes = (
-            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom'), True), # True means unique index
+            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'), True), # True means unique index
         )
 
 #if not T.table_exists():

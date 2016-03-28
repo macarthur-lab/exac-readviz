@@ -48,7 +48,7 @@ class _SharedVariantFields(_SharedMeta):
     pos = peewee.IntegerField()
     ref= peewee.CharField(max_length=MAX_ALLELE_SIZE)
     alt = peewee.CharField(max_length=MAX_ALLELE_SIZE)
-    het_or_hom = peewee.CharField(max_length=4)
+    het_or_hom_or_hemi = peewee.CharField(max_length=4)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
 
@@ -66,7 +66,7 @@ class Variant(_SharedVariantFields):
 
     class Meta:
         indexes = (
-            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom'), True), # True means unique index
+            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'), True), # True means unique index
         )
 
 # create table for per-variant-sample info
@@ -99,7 +99,7 @@ class Sample(_SharedVariantFields):
 
     class Meta:
         indexes = (
-            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom', 'sample_id'), True), # True means unique index
+            (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'sample_id'), True), # True means unique index
         )
 
 
