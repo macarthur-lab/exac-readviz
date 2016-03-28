@@ -48,7 +48,7 @@ class _SharedVariantFields(_SharedMeta):
     pos = peewee.IntegerField()
     ref= peewee.CharField(max_length=MAX_ALLELE_SIZE)
     alt = peewee.CharField(max_length=MAX_ALLELE_SIZE)
-    het_or_hom = peewee.CharField(max_length=3)
+    het_or_hom = peewee.CharField(max_length=4)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
 

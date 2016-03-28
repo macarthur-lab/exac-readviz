@@ -27,6 +27,7 @@ INCLUDE_N_ADJACENT_CALLING_REGIONS = 2
 
 EXAC_CALLING_INTERVALS_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regions.v1.interval_list")
 EXAC_INFO_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3_meta_Final.tsv")
+EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
 EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
 EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC_HC.0.3.release.vcf.gz")
 

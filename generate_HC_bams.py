@@ -19,7 +19,8 @@ import re
 from utils.database import init_db, Variant
 from utils.choose_samples import best_for_readviz_sample_id_iter
 from utils.constants import MAX_SAMPLES_TO_SHOW_PER_VARIANT, EXAC_FULL_VCF_PATH, BAM_OUTPUT_DIR
-from utils.exac_info_table import EXAC_SAMPLE_ID_TO_BAM_PATH, EXAC_SAMPLE_ID_TO_GVCF_PATH, EXAC_SAMPLE_ID_TO_INCLUDE_STATUS
+from utils.exac_info_table import EXAC_SAMPLE_ID_TO_BAM_PATH, EXAC_SAMPLE_ID_TO_GVCF_PATH, \
+    EXAC_SAMPLE_ID_TO_INCLUDE_STATUS, EXAC_SAMPLE_ID_TO_SEX
 from utils.exac_vcf import create_vcf_row_parser
 from utils.minimal_representation import get_minimal_representation
 from utils.haplotype_caller import run_haplotype_caller
@@ -102,25 +103,28 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
             if counters["all_alleles"] % 100 == 0:
                 logging.info(", ".join(["%s=%s" % (k, v) for k,v in sorted(counters.items(), key=lambda kv: kv[0])]),)
 
-            # choose het and hom-alt samples to display for this allele
-            for het_or_hom in ["het", "hom"]:
+            # choose het, hom-alt, and hemizygous samples to display for this allele
+            possible_genotypes = ["het", "hom", "hemi"] if chrom in ('X', 'Y') else ["het", "hom"]
+            for het_or_hom_or_hemi in possible_genotypes:
+
                 # check if allele has been processed already (skip if yes)
                 vr, created = Variant.get_or_create(
                     chrom=chrom,
                     pos=minrep_pos,
                     ref=minrep_ref,
                     alt=minrep_alt,
-                    het_or_hom=het_or_hom)
+                    het_or_hom_or_hemi = het_or_hom_or_hemi)
 
                 if vr.finished:
                     logging.info("%s-%s-%s-%s %s - already done (%s out of %s available) - skipping.." % (
-                        chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, vr.n_available_samples, vr.n_expected_samples))
-                    counters[het_or_hom+"_alleles_already_done"] += 1
+                        chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, vr.n_available_samples,
+                        vr.n_expected_samples))
+                    counters[het_or_hom_or_hemi+"_alleles_already_done"] += 1
                     continue
 
-                n_expected_samples = n_het if het_or_hom == "het" else n_hom
+                n_expected_samples = n_het if het_or_hom_or_hemi == "het" else n_hom
                 if n_expected_samples == 0:
-                    logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom))
+                    logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi))
                     vr.n_expected_samples=0
                     vr.finished=1
                     vr.save()
@@ -130,10 +134,13 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                 failed_sample_counter = 0
                 chosen_reassembled_bams = []
                 for next_best_readviz_sample_id in best_for_readviz_sample_id_iter(
-                            het_or_hom,
-                            alt_allele_index + 1,  # + 1 because 0 means REF in the genotype objects
-                            all_genotypes_in_row,
-                            EXAC_SAMPLE_ID_TO_INCLUDE_STATUS):
+                    chrom,
+                    minrep_pos,
+                    het_or_hom_or_hemi,
+                    alt_allele_index + 1,  # + 1 because 0 means REF in the genotype objects
+                    all_genotypes_in_row,
+                    EXAC_SAMPLE_ID_TO_INCLUDE_STATUS,
+                    EXAC_SAMPLE_ID_TO_SEX):
 
                     try:
                         original_bam_path = lookup_original_bam_path(next_best_readviz_sample_id)
@@ -144,23 +151,23 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                             minrep_pos,
                             minrep_ref,
                             minrep_alt,
-                            het_or_hom,
+                            het_or_hom_or_hemi,
                             original_bam_path,
                             original_gvcf_path,
                             bam_output_dir,
                             next_best_readviz_sample_id,
                             sample_i=len(chosen_reassembled_bams))
                     except Exception as e:
-                        logging.error("%s-%s-%s-%s %s - error in run_haplotype_caller: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, e))
+                        logging.error("%s-%s-%s-%s %s - error in run_haplotype_caller: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, e))
                         succeeded = False
 
                     if succeeded:
                         chosen_reassembled_bams.append(reassembled_bam_path)
                         if len(chosen_reassembled_bams) >= n_expected_samples:
-                            logging.info("%s-%s-%s-%s %s - all n_expected_samples == %d now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, n_expected_samples))
+                            logging.info("%s-%s-%s-%s %s - all n_expected_samples == %d now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, n_expected_samples))
                             break
                         if len(chosen_reassembled_bams) >= MAX_SAMPLES_TO_SHOW_PER_VARIANT:
-                            logging.info("%s-%s-%s-%s %s - all %d samples now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom, MAX_SAMPLES_TO_SHOW_PER_VARIANT))
+                            logging.info("%s-%s-%s-%s %s - all %d samples now found." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, MAX_SAMPLES_TO_SHOW_PER_VARIANT))
                             break
                     else:
                         failed_sample_counter += 1
