@@ -92,10 +92,11 @@ logging.info("INCLUDE_STATUS = True in %d out of %d (%0.1f%%) samples" % (
 (EXAC_SAMPLE_ID_TO_POP,
  EXAC_SAMPLE_ID_TO_SEX) = parse_exac_pop_sex_table(EXAC_POP_SEX_TABLE_PATH)
 
-n_male = len([s for s in EXAC_SAMPLE_ID_TO_POP.values() if s == 'm'])
-n_female = len([s for s in EXAC_SAMPLE_ID_TO_POP.values() if s == 'f'])
+n_male = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'm'])
+n_female = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'f'])
 
-assert n_male + n_female == len(EXAC_SAMPLE_ID_TO_POP)
+assert n_male + n_female == len(EXAC_SAMPLE_ID_TO_POP), \
+    "n_male (%s) + n_female (%s) != len(EXAC_SAMPLE_ID_TO_POP) (%s)" % (n_male, n_female, len(EXAC_SAMPLE_ID_TO_POP))
 
 logging.info("Loaded %s" % EXAC_POP_SEX_TABLE_PATH)
 logging.info("%d male, %d female" % (n_male, n_female))

@@ -6,7 +6,7 @@ DB_USER = 'root'
 
 DATA_DIR_PREFIX = '/humgen/atgu1/fs03/weisburd/exac_readviz_scripts_data' 
 BIN_DIR_PREFIX = os.path.join(DATA_DIR_PREFIX, 'bin') 
-BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend2/"
+BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
 
 
 # how many samples to show per het, hom-alt or hemizygous variant in the exac browser.
