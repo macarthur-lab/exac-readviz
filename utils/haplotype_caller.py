@@ -220,7 +220,7 @@ def run_haplotype_caller(
 
     run("rm -f %s" % final_output_bam_path)
     (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes) = retry_if_IOError(
-        postprocess_bam, temp_output_bam_path, final_output_bam_path)
+        postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, minrep_pos, minrep_ref, minrep_alt)
 
     run("rm -f %s" % temp_output_bam_path)
     run("chmod 666 %s" % final_output_bam_path)  # in case different users run this script
