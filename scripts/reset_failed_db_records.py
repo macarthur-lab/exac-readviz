@@ -9,15 +9,15 @@ from mysql.connector import MySQLConnection
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 # initialize flags that control which sections are actually executed
-reset_variants_with_transient_errors = 1
-reset_variants_with_fewer_than_expected_available_samples = 1
-reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
+reset_variants_with_transient_errors = 0
+reset_variants_with_fewer_than_expected_available_samples = 0
+reset_variants_with_original_bams_marked_missing_due_to_transient_error = 0
 reset_variants_with_bams_in_db_but_not_on_disk = 0
 set_intervals_where_all_contained_varaints_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
 reset_intervals_that_contain_unfinished_variants = 0
-reset_intervals_that_had_error_code = 1
-reset_unifinished_intervals_to_clear_job_id = 1
+reset_intervals_that_had_error_code = 0
+reset_unifinished_intervals_to_clear_job_id = 0
 run_stat_queries = 0
 
 # set flags to execute particular sections of code
