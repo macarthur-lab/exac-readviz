@@ -55,7 +55,7 @@ args.command = " ".join(args.command + unknown_args)
 logging.info("args: command: " + args.command)
 logging.info("db_table_name: " + db_table_name)
 
-db = playhouse.pool.PooledMySQLDatabase('parallelize', user=DB_USER, host=DB_HOST, port=DB_PORT)
+db = playhouse.pool.PooledMySQLDatabase('exac_readviz', user=DB_USER, host=DB_HOST, port=DB_PORT)
 
 print("Starting..")
 
