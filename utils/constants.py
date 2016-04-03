@@ -1,6 +1,8 @@
 import logging
 import os
 
+from utils.file_utils import does_file_exist
+
 DB_HOST = 'exac-dev'
 DB_PORT = 3307 
 DB_USER = 'root'
@@ -53,7 +55,7 @@ for path in (EXAC_CALLING_INTERVALS_PATH, EXAC_INFO_TABLE_PATH,
              EXAC_POP_SEX_TABLE_PATH, EXAC_FULL_VCF_PATH, EXAC_SITES_VCF_PATH,
              EXAC_SITES_VCF_PATH, GENCODE_EXAC_GTF_PATH,
              PICARD_JAR_PATH, GATK_JAR_PATH):
-    if not os.path.isifile(path):
+    if not does_file_exist(path, use_cache=False):
         logging.error("ERROR: file not found: " + path)
         all_files_exist = False
 
