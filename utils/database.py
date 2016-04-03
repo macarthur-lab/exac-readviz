@@ -89,6 +89,7 @@ class Sample(_SharedVariantFields):
     hc_error_code = peewee.IntegerField(default=None, index=True, null=True)
     hc_error_text = peewee.TextField(default=None, null=True)
     hc_n_artificial_haplotypes = peewee.IntegerField(default=None, index=True, null=True)
+    hc_n_artificial_haplotypes_filtered = peewee.IntegerField(default=None, index=True, null=True)
 
     hc_started_time = peewee.DateTimeField(default=None, null=True)
     hc_finished_time = peewee.DateTimeField(default=None, null=True)

@@ -52,6 +52,8 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
         2-tuple with (is_empty, artificial_haplotype_counter) where
            is_empty: is True if the input_bam was empty
            artificial_haplotype_counter: the number of artificial haplotypes found in the input bam
+           artificial_haplotype_counter_filtered: the number of artificial haplotypes after filtering out those that
+                overlap other artificial haplotypes in a way that might cause double-counting of reads.
 
     """
 
@@ -102,6 +104,8 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
             # intersection found, so delete all reads mapping to this haplotype that doesn't overlap the variant
             del raw_reads[haplotype_id]
 
+    artificial_haplotype_counter_filtered = len(raw_reads)
+
     # sanity check
     if not raw_reads:
         assert artificial_haplotype_counter > 0, \
@@ -147,7 +151,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     if obam is not None:
         obam.close()
 
-    return (is_input_bam_empty, artificial_haplotype_counter)
+    return (is_input_bam_empty, artificial_haplotype_counter, artificial_haplotype_counter_filtered)
 
 
 if __name__ == "__main__":
