@@ -1,4 +1,5 @@
 import argparse
+import logging
 import pysam
 import re
 
@@ -97,14 +98,14 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     # For each artificial haplotype that doesn't overlap the variant, check if it overlaps any of the artificial
     # haplotypes that do overlap the variant. If it does then discard all raw reads that map it since these reads cause
     # bumps in the coverage plot due to double-counting of the overlapping reads.
+    artificial_haplotypes_deleted_counter = 0
     for haplotype_id, artificial_haplotype_that_doesnt_overlap_variant in artificial_haplotypes_that_dont_overlap_variant.items():
         if do_intervals_intersect(
                 artificial_haplotype_that_doesnt_overlap_variant,
                 union_of_artificial_haplotypes_that_overlap_variant):
             # intersection found, so delete all reads mapping to this haplotype that doesn't overlap the variant
+            artificial_haplotypes_deleted_counter += 1
             del raw_reads[haplotype_id]
-
-    artificial_haplotype_counter_filtered = len(raw_reads)
 
     # sanity check
     if not raw_reads:
@@ -112,6 +113,9 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
             "Expected HaplotypeCaller to add at least one record with " \
             "RG == 'ArtificialHaplotype'. " \
             "%(input_bam_path)s => %(output_bam_path)" % locals()
+
+    if artificial_haplotypes_deleted_counter > 0:
+        logging.error("postprocessing: discarded %(artificial_haplotypes_deleted_counter)d out of %(artificial_haplotype_counter)d artificial haplotypes" % locals())
 
     # write out the bam
     reference_sequences = []

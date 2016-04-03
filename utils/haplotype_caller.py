@@ -169,7 +169,8 @@ def run_haplotype_caller(
         # add the return code to the ERROR_CODE so that different types of crashes have a different error code
         hc_failed(ERROR_HC_CRASHED + abs(e.returncode) % 500, error_message, sr, files_to_delete_on_error)
         logging.error("ERROR: HC failed: return code %s." % e.returncode)
-        #logging.error("   GATK output:\n%s" % sample_record.hc_error_text)
+        logging.error("ERROR: GATK output:")
+        logging.error("\t %s" % sr.hc_error_text)
         return (False, None)
 
     # check GVCF against original GVCF call
