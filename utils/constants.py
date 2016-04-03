@@ -1,3 +1,4 @@
+import logging
 import os
 
 DB_HOST = 'exac-dev'
@@ -31,6 +32,14 @@ EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
 EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
 EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC_HC.v3.1.final.vep.release.vcf.gz")
 GENCODE_EXAC_GTF_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.gtf.gz")
+
+PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting bam
+
+GATK_JAR_PATH = os.path.abspath(os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
+
+# used for igv screenshots
 GENCODE_BED_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.v19.sorted.bed")
 EXAC_CALLING_INTERVALS_BED_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regions.v1.bed")
 SELF_CHAIN_BED_PATH = os.path.join(DATA_DIR_PREFIX, "self_chain.sorted.bed")
@@ -39,7 +48,14 @@ IGV_JAR_PATH = os.path.join(BIN_DIR_PREFIX, "IGV_2.3.44/igv.jar")
 IGV_SCREEN_WIDTH = 300
 IGV_TRACK_HEIGHT = 500
 
-PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting bam
+all_files_exist = True
+for path in (EXAC_CALLING_INTERVALS_PATH, EXAC_INFO_TABLE_PATH,
+             EXAC_POP_SEX_TABLE_PATH, EXAC_FULL_VCF_PATH, EXAC_SITES_VCF_PATH,
+             EXAC_SITES_VCF_PATH, GENCODE_EXAC_GTF_PATH,
+             PICARD_JAR_PATH, GATK_JAR_PATH):
+    if not os.path.isifile(path):
+        logging.error("ERROR: file not found: " + path)
+        all_files_exist = False
 
-JATK_JAR_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin/noMQ0sInBamout/GenomeAnalysisTK.jar")
-
+if not all_files_exist:
+    raise Exception("Critical files not found")
