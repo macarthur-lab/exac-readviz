@@ -9,15 +9,15 @@ from mysql.connector import MySQLConnection
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 # initialize flags that control which sections are actually executed
-reset_variants_with_transient_errors = 0
-reset_variants_with_fewer_than_expected_available_samples = 0
-reset_variants_with_original_bams_marked_missing_due_to_transient_error = 0
+reset_variants_with_transient_errors = 1
+reset_variants_with_fewer_than_expected_available_samples = 1
+reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
 reset_variants_with_bams_in_db_but_not_on_disk = 0
 set_intervals_where_all_contained_varaints_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
 reset_intervals_that_contain_unfinished_variants = 0
-reset_intervals_that_had_error_code = 0
-reset_unifinished_intervals_to_clear_job_id = 0
+reset_intervals_that_had_error_code = 1
+reset_unifinished_intervals_to_clear_job_id = 1
 run_stat_queries = 0
 
 # set flags to execute particular sections of code
@@ -87,16 +87,18 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
     print("Found %d distinct bams that caused 1000 error" % len(all_original_bam_paths))
     found_bam_paths = tuple([p[0] for p in all_original_bam_paths if os.path.isfile(p[0])])
     print("Of these, %d actually exist on disk. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
-    run_query(("update variant as v join sample as s on "
+    if found_bam_paths:
+        run_query(("update variant as v join sample as s on "
               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
-              "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
+               "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
-    run_query(("update sample as s join variant as v on "
+    if found_bam_paths:
+        run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
                "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
-               "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths))
+               "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
 
 
@@ -210,7 +212,7 @@ if reset_variants_with_fewer_than_expected_available_samples:
     run_query("update exac_readviz.variant as v "
               "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
               "where n_available_samples<n_expected_samples and n_available_samples < ("
-              "  select count(*) from sample as s where chrom=v.chrom and pos=v.pos and ref=v.ref and alt=v.alt and het_or_hom=v.het_or_hom_or_hemi and hc_succeeded=1"
+              "  select count(*) from sample as s where chrom=v.chrom and pos=v.pos and ref=v.ref and alt=v.alt and het_or_hom_or_hemi=v.het_or_hom_or_hemi and hc_succeeded=1"
               ")")
 
 if reset_variants_with_bams_in_db_but_not_on_disk:

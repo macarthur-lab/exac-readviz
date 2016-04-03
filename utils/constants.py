@@ -29,8 +29,7 @@ EXAC_CALLING_INTERVALS_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regio
 EXAC_INFO_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3_meta_Final.tsv")
 EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
 EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
-EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC_HC.0.3.release.vcf.gz")
-
+EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC_HC.v3.1.final.vep.release.vcf.gz")
 GENCODE_EXAC_GTF_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.gtf.gz")
 GENCODE_BED_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.v19.sorted.bed")
 EXAC_CALLING_INTERVALS_BED_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regions.v1.bed")
