@@ -13,7 +13,7 @@ from utils.check_gvcf import check_gvcf
 from utils.database import Sample
 from utils.exac_calling_intervals import get_adjacent_calling_intervals
 from utils.screenshots import take_screenshots
-from utils.constants import NUM_OUTPUT_DIRECTORIES_L1, INCLUDE_N_ADJACENT_CALLING_REGIONS, MAX_ALLELE_SIZE
+from utils.constants import NUM_OUTPUT_DIRECTORIES_L1, INCLUDE_N_ADJACENT_CALLING_REGIONS, MAX_ALLELE_SIZE, GATK_JAR_PATH
 
 # error codes
 ERROR_ORIGINAL_BAM_NOT_FOUND = 1000
@@ -128,7 +128,7 @@ def run_haplotype_caller(
         "-XX:MaxHeapSize=512m",
         #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
         "-Xmx15g",
-        '-jar', '/humgen/gsa-hpprojects/dev/gauthier/scratch/noMQ0sInBamout/GenomeAnalysisTK.jar',
+        '-jar', GATK_JAR_PATH,
         '-T', 'HaplotypeCaller',
         '-R', "/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta",
         '--disable_auto_index_creation_and_locking_when_reading_rods',

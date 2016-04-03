@@ -41,3 +41,5 @@ IGV_TRACK_HEIGHT = 500
 
 PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting bam
 
+JATK_JAR_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "bin/noMQ0sInBamout/GenomeAnalysisTK.jar")
+
