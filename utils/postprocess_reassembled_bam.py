@@ -115,7 +115,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
             "%(input_bam_path)s => %(output_bam_path)" % locals()
 
     if artificial_haplotypes_deleted_counter > 0:
-        logging.error("postprocessing: discarded %(artificial_haplotypes_deleted_counter)d out of %(artificial_haplotype_counter)d artificial haplotypes" % locals())
+        logging.error("post-processing: discarded %(artificial_haplotypes_deleted_counter)d out of %(artificial_haplotype_counter)d artificial haplotypes" % locals())
 
     # write out the bam
     reference_sequences = []
