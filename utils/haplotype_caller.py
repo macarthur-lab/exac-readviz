@@ -224,7 +224,7 @@ def run_haplotype_caller(
     final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
 
     run("rm -f %s" % final_output_bam_path)
-    (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes, sr.hc_n_artificial_haplotypes_filtered) = retry_if_IOError(
+    (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes, sr.hc_n_artificial_haplotypes_deleted) = retry_if_IOError(
         postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, minrep_pos, minrep_ref, minrep_alt)
 
     run("rm -f %s" % temp_output_bam_path)

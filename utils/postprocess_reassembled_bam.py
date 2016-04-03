@@ -53,7 +53,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
         2-tuple with (is_empty, artificial_haplotype_counter) where
            is_empty: is True if the input_bam was empty
            artificial_haplotype_counter: the number of artificial haplotypes found in the input bam
-           artificial_haplotype_counter_filtered: the number of artificial haplotypes after filtering out those that
+           artificial_haplotypes_deleted_counter: the number of artificial haplotypes discarded because they
                 overlap other artificial haplotypes in a way that might cause double-counting of reads.
 
     """
@@ -155,7 +155,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     if obam is not None:
         obam.close()
 
-    return (is_input_bam_empty, artificial_haplotype_counter, artificial_haplotype_counter_filtered)
+    return (is_input_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
 
 
 if __name__ == "__main__":
