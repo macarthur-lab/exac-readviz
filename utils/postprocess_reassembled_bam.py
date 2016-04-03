@@ -4,13 +4,26 @@ import re
 
 
 def interval_union(a, b):
-    """Returns a 2-tuple representing the union of two intervals represented as 2-tuples containing integer coords."""
+    """Returns a 2-tuple representing the union of two intervals.
+    Args:
+        a:  2-tuple containing integer coordinates representing a half-open interval.
+        b:  2-tuple containing integer coordinates representing the other half-open interval.
+    Returns:
+        2-tuple containing integer coordinates representing the union(a, b) as a half-open interval.
+    """
 
-    return ( min(a[0], b[0]), max(a[1], b[1]) )
+    return min(a[0], b[0]), max(a[1], b[1])
 
 
 def do_intervals_intersect(a, b):
-    """Returns true if the given 2-tuples overlap."""
+    """Returns true if the given 2-tuples overlap.
+
+    Args:
+        a:  2-tuple containing integer coordinates representing a half-open interval.
+        b:  2-tuple containing integer coordinates representing the other half-open interval.
+    Returns:
+        True if a and b overlap.
+    """
 
     return a[0] < b[1] and a[1] > b[0]
 
@@ -51,25 +64,27 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     artificial_haplotype_counter = 0
     is_input_bam_empty = True
 
+    # artificial haplotype coords are half-open (eg. (start=83, end=93) has length 10)
+    union_of_artificial_haplotypes_that_overlap_variant = (1e9, 0)  # union of genomic intervals spanned by artificial haplotypes that overlap the variant
+    artificial_haplotypes_that_dont_overlap_variant = {}  # maps each artificial haplotype id (eg. HC tag value) to the interval spanned by this artificial haplotype: (r.reference_start, r.reference_end)
+
     # iterate over the reads
-    range_artificial_haplotypes_that_overlap_variant = (1e9, 0)
-    artificial_haplotypes_that_dont_overlap_variant = {}  # maps each artificial haplotype id (eg. HC tag value) to its (r.reference_start, r.reference_end)
-
-    raw_reads = {}  # maps each artificial haplotype id (eg. HC tag value) to the list of reads with that id (HC tag value).
-
+    raw_reads = {}  # maps each artificial haplotype id (eg. HC tag value) to the list of reads assigned to this haplotype (eg. that have this id in their HC tag)
     ibam = pysam.AlignmentFile(input_bam_path, "rb")
     for r in ibam:
         tags = dict(r.tags)
         haplotype_id = tags['HC']
         if tags.get('RG') == "ArtificialHaplotype":
-            # handle reads that are actually artificial haplotypes - check whether the artificial haplotype overlaps the variant
+            # handle reads that are actually artificial haplotypes
             artificial_haplotype_counter += 1
+            # check whether the artificial haplotype overlaps the variant
             if r.reference_start >= variant_end or r.reference_end <= variant_start:
-                # half-open coords (eg. (start=83, end=93) has length 10)
+                # there's no overlap
                 artificial_haplotypes_that_dont_overlap_variant[haplotype_id] = (r.reference_start, r.reference_end)
             else:
-                range_artificial_haplotypes_that_overlap_variant = interval_union((r.reference_start, r.reference_end),
-                        range_artificial_haplotypes_that_overlap_variant)
+                union_of_artificial_haplotypes_that_overlap_variant = interval_union(
+                        (r.reference_start, r.reference_end),
+                        union_of_artificial_haplotypes_that_overlap_variant)
 
         else:
             # this is a regular read - save it, hashed by the haplotype_id of the haplotype that it was mapped to.
@@ -77,13 +92,15 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
                 raw_reads[haplotype_id] = []
             raw_reads[haplotype_id].append(r)
 
-    # check whether any artificial haplotypes that don't overlap the variant do overlap other artificial that overlap the variant
-    for hc in artificial_haplotypes_that_dont_overlap_variant:
-        range_artificial_haplotype_that_doesnt_overlap_variant = range_artificial_haplotypes_that_overlap_variant[hc]
-        if do_intervals_intersect(range_artificial_haplotype_that_doesnt_overlap_variant,
-                                  range_artificial_haplotypes_that_overlap_variant):
-            # delete these overlapping artificial haplotypes since they lead to bumps in the coverage plot as a result of the overlapping reads being 'double-counted'
-            del raw_reads[hc]
+    # For each artificial haplotype that doesn't overlap the variant, check if it overlaps any of the artificial
+    # haplotypes that do overlap the variant. If it does then discard all raw reads that map it since these reads cause
+    # bumps in the coverage plot due to double-counting of the overlapping reads.
+    for haplotype_id, artificial_haplotype_that_doesnt_overlap_variant in artificial_haplotypes_that_dont_overlap_variant.items():
+        if do_intervals_intersect(
+                artificial_haplotype_that_doesnt_overlap_variant,
+                union_of_artificial_haplotypes_that_overlap_variant):
+            # intersection found, so delete all reads mapping to this haplotype that doesn't overlap the variant
+            del raw_reads[haplotype_id]
 
     # sanity check
     if not raw_reads:
