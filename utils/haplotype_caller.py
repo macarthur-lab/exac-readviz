@@ -66,9 +66,11 @@ def run_haplotype_caller(
         #logging.info("%s-%s-%s-%s - %s - already done " % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id))
         return (sr.hc_succeeded, sr.output_bam_path)
 
+    sr.started = 1
     sr.hc_started_time=datetime.datetime.now()
     sr.original_bam_path = original_bam_path
     sr.output_bam_path = output_bam_path
+    sr.save()
 
     logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
     if not does_file_exist(sr.original_bam_path):

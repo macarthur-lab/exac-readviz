@@ -49,6 +49,7 @@ class _SharedVariantFields(_SharedMeta):
     ref= peewee.CharField(max_length=MAX_ALLELE_SIZE)
     alt = peewee.CharField(max_length=MAX_ALLELE_SIZE)
     het_or_hom_or_hemi = peewee.CharField(max_length=4)
+    started = peewee.BooleanField(default=0)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
 

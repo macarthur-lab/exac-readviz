@@ -123,6 +123,9 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     counters[het_or_hom_or_hemi+"_alleles_already_done"] += 1
                     continue
 
+                vr.started = 1
+                vr.save()
+
                 if het_or_hom_or_hemi == "het":
                     n_expected_samples = n_het
                 elif het_or_hom_or_hemi == "hom":
