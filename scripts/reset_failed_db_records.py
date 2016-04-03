@@ -218,7 +218,7 @@ if reset_variants_with_fewer_than_expected_available_samples:
 if reset_variants_with_bams_in_db_but_not_on_disk:
     print("=== reset_variants_with_bams_in_db_but_not_on_disk ===")
     import glob
-    os.chdir("/broad/hptmp/exac_readviz_backend2/")
+    os.chdir("/broad/hptmp/exac_readviz_backend/")
     for current_chrom in ALL_CHROMS:
         print("globbing for all bam files in chr%s" % current_chrom)
         actual_files_on_disk = set(glob.glob(current_chrom +"/*/chr*.bam"))
