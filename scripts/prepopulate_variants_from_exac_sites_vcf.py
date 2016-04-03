@@ -16,6 +16,8 @@ p.add_argument("-p", "--exac-sites-vcf-path", help="ExAC sites VCF path", defaul
 p.add_argument("--chrom", help="Chromosome to process", required=True)
 args = p.parse_args()
 
+Variant.create_table(fail_silently=True)
+
 start_at_pos = 1
 #for v in Variant.select(fn.Max(Variant.pos).alias('max_pos')).where(Variant.chrom==args.chrom):
 #    start_at_pos = v.max_pos
