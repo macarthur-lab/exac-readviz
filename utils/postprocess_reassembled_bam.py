@@ -65,7 +65,6 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     # This counter is used as a sanity check that HC added at least one artificial haplotype (typically it adds
     # 2*n of these where n is the number of SNPs in the region).
     artificial_haplotype_counter = 0
-    is_input_bam_empty = True
 
     # artificial haplotype coords are half-open (eg. (start=83, end=93) has length 10)
     union_of_artificial_haplotypes_that_overlap_variant = (1e9, 0)  # union of genomic intervals spanned by artificial haplotypes that overlap the variant
@@ -95,11 +94,18 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
                 raw_reads[haplotype_id] = []
             raw_reads[haplotype_id].append(r)
 
+    artificial_haplotypes_deleted_counter = 0
+    if not raw_reads:
+        is_bam_empty = True
+        return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
+
     # For each artificial haplotype that doesn't overlap the variant, check if it overlaps any of the artificial
     # haplotypes that do overlap the variant. If it does then discard all raw reads that map it since these reads cause
     # bumps in the coverage plot due to double-counting of the overlapping reads.
-    artificial_haplotypes_deleted_counter = 0
     for haplotype_id, artificial_haplotype_that_doesnt_overlap_variant in artificial_haplotypes_that_dont_overlap_variant.items():
+        if haplotype_id not in raw_reads:
+            continue # skip haplotypes that have no reads mapped to them (this does happen)
+
         if do_intervals_intersect(
                 artificial_haplotype_that_doesnt_overlap_variant,
                 union_of_artificial_haplotypes_that_overlap_variant):
@@ -109,13 +115,16 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
 
     # sanity check
     if not raw_reads:
-        assert artificial_haplotype_counter > 0, \
-            "Expected HaplotypeCaller to add at least one record with " \
-            "RG == 'ArtificialHaplotype'. " \
-            "%(input_bam_path)s => %(output_bam_path)" % locals()
+        is_bam_empty = True
+        return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
+
+        #assert artificial_haplotype_counter > 0, \
+        #    "Expected HaplotypeCaller to add at least one record with " \
+        #    "RG == 'ArtificialHaplotype'. " \
+        #    "%(input_bam_path)s => %(output_bam_path)s" % locals()
 
     if artificial_haplotypes_deleted_counter > 0:
-        logging.error("post-processing: discarded %(artificial_haplotypes_deleted_counter)d out of %(artificial_haplotype_counter)d artificial haplotypes" % locals())
+        logging.info("post-processing: discarded %(artificial_haplotypes_deleted_counter)d out of %(artificial_haplotype_counter)d artificial haplotypes" % locals())
 
     # write out the bam
     reference_sequences = []
@@ -131,6 +140,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
               'RG': [],
               }
 
+    is_bam_empty = True
     obam = pysam.AlignmentFile(output_bam_path, "wb", header=header)
     for hc, reads in raw_reads.items():
         for r in reads:
@@ -149,13 +159,13 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
             s.query_qualities = r.query_qualities
 
             obam.write(s)
-            is_input_bam_empty = False
+            is_bam_empty = False
 
 
     if obam is not None:
         obam.close()
 
-    return (is_input_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
+    return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
 
 
 if __name__ == "__main__":
