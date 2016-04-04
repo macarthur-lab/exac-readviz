@@ -13,21 +13,22 @@ reset_variants_with_transient_errors = 0
 reset_variants_with_fewer_than_expected_available_samples = 0
 reset_variants_with_original_bams_marked_missing_due_to_transient_error = 0
 reset_variants_with_bams_in_db_but_not_on_disk = 0
-set_intervals_where_all_contained_varaints_have_finished = 0
-reset_unfinished_intervals_in_important_genes = 0
 reset_intervals_that_contain_unfinished_variants = 0
 reset_intervals_that_had_error_code = 0
 reset_unifinished_intervals_to_clear_job_id = 0
 run_stat_queries = 0
+set_intervals_where_all_contained_varaints_have_finished = 0
+reset_unfinished_intervals_in_important_genes = 0
 
 # set flags to execute particular sections of code
-#reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
-#reset_variants_with_transient_errors = 1
-#reset_variants_with_fewer_than_expected_available_samples = 1
-reset_variants_with_bams_in_db_but_not_on_disk = 1
+reset_variants_with_transient_errors = 1
+reset_variants_with_fewer_than_expected_available_samples = 1
+reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
+#reset_variants_with_bams_in_db_but_not_on_disk = 1
 reset_intervals_that_contain_unfinished_variants = 1
-reset_intervals_that_had_error_code = 1
-#reset_unifinished_intervals_to_clear_job_id = 1
+#reset_intervals_that_had_error_code = 1
+reset_unifinished_intervals_to_clear_job_id = 1
+run_stat_queries = 1
 
 
 print("connecting to db")
@@ -94,11 +95,11 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
                "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
-    if found_bam_paths:
         run_query(("update sample as s join variant as v on "
                "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
                "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
-               "and s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
+               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
+               "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
 
 
@@ -136,13 +137,13 @@ if reset_unfinished_intervals_in_important_genes:
 
 
 
-    run_query(("select * from parallelize.python3_4_generate_HC_bams_py_i200 "
+    run_query(("select * from exac_readviz.python3_4_generate_HC_bams_py_i200 "
                "where finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
 
 
     # enable intervals that are overlapping the intervals of interest
     print("Reset intervals overlapping intervals of interest")
-    run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set job_id=NULL, task_id=NULL, unique_id=NULL "
+    run_query(("update exac_readviz.python3_4_generate_HC_bams_py_i200 set job_id=NULL, task_id=NULL, unique_id=NULL "
                "where (job_id is NULL or job_id = -1 ) and finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
 
 
@@ -165,11 +166,11 @@ if run_stat_queries or set_intervals_where_all_contained_varaints_have_finished 
     +---------------------+--------------+------+-----+---------+----------------+
     """
 
-    # parallelize.python3_4_generate_HC_bams_py_i200
+    # exac_readviz.python3_4_generate_HC_bams_py_i200
     # get all intervals
     from collections import defaultdict
     all_intervals = defaultdict(set)
-    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from parallelize.python3_4_generate_HC_bams_py_i200") #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from exac_readviz.python3_4_generate_HC_bams_py_i200") #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
     for chrom, start_pos, end_pos, started, finished, error_code in c:
         all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
 
@@ -195,18 +196,26 @@ if set_intervals_where_all_contained_varaints_have_finished:
             if c.rowcount > 0:
                 print("Found %s unfinished variants in %s:%s-%s. Skipping" % (c.rowcount, current_chrom, start_pos, end_pos))
             else:
-                run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 set job_id=1, started=1, finished=1 "
+                run_query(("update exac_readviz.python3_4_generate_HC_bams_py_i200 set job_id=1, started=1, finished=1 "
                            "where chrom='%(current_chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
 if reset_variants_with_fewer_than_expected_available_samples:
     print("=== reset_variants_with_fewer_than_expected_available_samples ===")
+    # Reset samples to finished = 0 where hc_u
+    run_query(("update sample as s join variant as v on "
+               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
+               "set s.finished=0, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
+               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
+               "v.finished=0 and s.finished=1 and s.hc_succeeded=0"))
+
     # Reset variants to finished = 0 where number of records in the sample table that either succeeded or had an error is < n_expected_samples
-    run_query("update exac_readviz.variant as v "
-              "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
-              "where n_available_samples<n_expected_samples and "
-              "n_expected_samples > ("
-              " select count(*) from sample as s where chrom=v.chrom and pos=v.pos and alt=v.alt and het_or_hom_or_hemi=v.het_or_hom_or_hemi and (hc_succeeded=1 or hc_error_code>0)"
-              ")")
+    # COMMENTED OUT BECAUSE IT RESETS TOO MANY VARIANTS - NEED TO DETRMINE WHY
+    #run_query("update exac_readviz.variant as v "
+    #          "set v.finished=0, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL  "
+    #          "where n_available_samples<n_expected_samples and "
+    #          "n_expected_samples > ("
+    #          " select count(*) from sample as s where chrom=v.chrom and pos=v.pos and alt=v.alt and het_or_hom_or_hemi=v.het_or_hom_or_hemi and (hc_succeeded=1 or hc_error_code>0)"
+    #          ")")
 
     # Reset variants to finished = 0 where the variant.n_available_samples < records in the sample table that have hc_succeeded=1
     run_query("update exac_readviz.variant as v "
@@ -274,11 +283,11 @@ if reset_intervals_that_contain_unfinished_variants:
             chrom = i[0]
             start_pos = i[1]
             end_pos = i[2]
-            run_query(("update parallelize.python3_4_generate_HC_bams_py_i200 "
+            run_query(("update exac_readviz.python3_4_generate_HC_bams_py_i200 "
                        "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
                        "where chrom='%(chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
-        #print_query("update parallelize.python3_4_generate_HC_bams_py_i200 set "
+        #print_query("update exac_readviz.python3_4_generate_HC_bams_py_i200 set "
         #            "job_id=NULL, task_id=NULL, unique_id=NULL, started=0, "
         #            "started_date=NULL, finished=0, finished_date=NULL, "
         #            "error_code=500, error_message=NULL where finished=0 and started_date <")
@@ -286,13 +295,13 @@ if reset_intervals_that_contain_unfinished_variants:
 
 if reset_intervals_that_had_error_code:
     print("=== reset_intervals_that_had_error_code ===")
-    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
+    run_query("update exac_readviz.python3_4_generate_HC_bams_py_i200 "
               "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where error_code > 0")
 
 if reset_unifinished_intervals_to_clear_job_id:
     print("=== reset_unifinished_intervals_to_clear_job_id ===")
-    run_query("update parallelize.python3_4_generate_HC_bams_py_i200 "
+    run_query("update exac_readviz.python3_4_generate_HC_bams_py_i200 "
               "set job_id=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where finished=0")
 
