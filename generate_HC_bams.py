@@ -186,6 +186,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                         failed_sample_counter += 1
 
                 # save variant record
+                logging.info("%s-%s-%s-%s %s - saving as finished." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi))
                 vr.n_expected_samples=min(n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
                 vr.n_available_samples=len(chosen_reassembled_bams)
                 vr.n_failed_samples=failed_sample_counter

@@ -190,7 +190,7 @@ if is_startup:
         subprocess.check_call(launch_array_job_cmd, shell=True)
         subprocess.check_call(launch_array_job_cmd, shell=True)
         subprocess.check_call(launch_array_job_cmd, shell=True)
-        subprocess.check_call(launch_array_job_cmd, shell=True)
+        #subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # TODO run loop that restarts array jobs, and also does error recovery
         # to reset unfinished task from jobs that have finished

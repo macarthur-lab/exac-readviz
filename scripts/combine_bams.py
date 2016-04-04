@@ -196,10 +196,10 @@ def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser("Generates combined bams")
+    p.add_argument("--chrom", help="chromosome", required=True)
     p.add_argument("-d", "--output-dir", help="the top-level output directory", default=BAM_OUTPUT_DIR)
     p.add_argument("-t", "--non-nfs-temp-dir", help="local non-NFS-mounted temp directory to use for sqlite oprations", default="/tmp")
     p.add_argument("-f", "--force", help="regenerate combined .bam and sqlite .db even they already exist", action="store_true")
-    p.add_argument("--chrom", help="optional chromosome", required=True)
     g = p.add_argument_group()
     g.add_argument("-k", "--position-hash",
        help="bams are divided between directories with names 000 through 999. "
