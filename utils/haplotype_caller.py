@@ -235,6 +235,7 @@ def run_haplotype_caller(
 
         files_to_delete_on_error.append( final_output_bam_path )
         files_to_delete_on_error.append( final_output_bam_path+".bai" )
+        sr.finished = 1
         hc_failed(ERROR_REASSEMBLED_BAM_IS_EMPTY, sr.hc_command_line, sr, files_to_delete_on_error)
         return (False, None)
     else:
