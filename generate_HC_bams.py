@@ -124,6 +124,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     continue
 
                 vr.started = 1
+                vr.comments = str(vr.comments or "") + "_s"
                 vr.save()
 
                 if het_or_hom_or_hemi == "het":
@@ -139,6 +140,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi))
                     vr.n_expected_samples=0
                     vr.finished=1
+                    vr.comments = str(vr.comments or "") + "_n_expected=0"
                     vr.save()
                     continue
 
@@ -192,6 +194,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                 vr.n_failed_samples=failed_sample_counter
                 vr.readviz_bam_paths="|".join(chosen_reassembled_bams)
                 vr.finished=1
+                vr.comments = str(vr.comments or "") + "_done_%d_of_%d" % (vr.n_available_samples, vr.n_expected_samples)
                 vr.save()
 
 
