@@ -69,6 +69,7 @@ def run_haplotype_caller(
         return (sr.hc_succeeded, sr.output_bam_path)
 
     sr.started = 1
+    sr.comments = str(sr.comments or "")+"_s"  # started - used to check that started only once
     sr.hc_started_time=datetime.datetime.now()
     sr.original_bam_path = original_bam_path
     sr.output_bam_path = output_bam_path
@@ -243,6 +244,7 @@ def run_haplotype_caller(
         #run("mv -f %s %s" % (temp_output_bam_path.replace(".bam", ".bai"), final_output_bam_path.replace(".bam", ".bai")))
         #run("samtools index %s" % output_bam_path)
 
+    sr.comments = str(sr.comments or "") + "_succeeded"
     sr.finished = 1
     sr.hc_finished_time = datetime.datetime.now()
     sr.sample_i = sample_i
@@ -286,6 +288,7 @@ def hc_failed(error_code, message, sample_record, files_to_delete=None):
     sample_record.hc_error_code = error_code
     sample_record.hc_error_text = message
     sample_record.output_bam_path = None
+    sample_record.comments = str(sample_record.comments or "") + "_error"+str(error_code)
     sample_record.save()
 
     if files_to_delete:

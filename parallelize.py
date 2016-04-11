@@ -29,6 +29,7 @@ import random
 import slugify
 import subprocess
 import sys
+import time
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 import logging
@@ -55,7 +56,7 @@ args.command = " ".join(args.command + unknown_args)
 logging.info("args: command: " + args.command)
 logging.info("db_table_name: " + db_table_name)
 
-db = playhouse.pool.PooledMySQLDatabase('exac_readviz', user=DB_USER, host=DB_HOST, port=DB_PORT)
+db = peewee.MySQLDatabase('exac_readviz', user=DB_USER, host=DB_HOST, port=DB_PORT)
 
 print("Starting..")
 
@@ -85,6 +86,8 @@ class ParallelIntervals(peewee.Model):
     username = peewee.CharField(null=True, max_length=100)
     machine_hostname = peewee.CharField(null=True, max_length=100)
     machine_average_load = peewee.FloatField(null=True)
+
+    comments = peewee.CharField(null=True, max_length=100)  # used for debugging
 
     class Meta:
         db_table = db_table_name
@@ -186,11 +189,6 @@ if is_startup:
         logging.info("Running: %s" % launch_array_job_cmd)
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
-        # run several times
-        subprocess.check_call(launch_array_job_cmd, shell=True)
-        subprocess.check_call(launch_array_job_cmd, shell=True)
-        subprocess.check_call(launch_array_job_cmd, shell=True)
-        #subprocess.check_call(launch_array_job_cmd, shell=True)
 
         # TODO run loop that restarts array jobs, and also does error recovery
         # to reset unfinished task from jobs that have finished
@@ -225,33 +223,40 @@ if not is_startup or args.run_local:
 
         # get next interval
         current_interval = None
-        with db.atomic() as txn:
-            # claim an interval
-            unprocessed_intervals = list(ParallelIntervals.select()\
-                .where((
-                    ParallelIntervals.job_id >> None) & (
-                    ParallelIntervals.task_id >> None) & (
-                    ParallelIntervals.unique_id >> None))\
-                .limit(1)
-            )
+        
+        # claim an interval
+        #with db.atomic() as txn:
+        # for some reason, db.atomic() stopped working in that the select + update operations that follow don't work atomically
+        # instead, had to fall back on LOCK / UNLOCK table
+        if True:  
+            db.execute_sql("LOCK TABLE %s WRITE" % db_table_name)
+            unprocessed_intervals =  ParallelIntervals.raw("SELECT * FROM %s WHERE job_id is NULL and task_id is NULL and unique_id is NULL" % db_table_name) 
 
-            #.order_by(ParallelIntervals.priority)\
-            #.order_by(peewee.fn.Rand())\
-
+            #ParallelIntervals.select().where((
+            #        ParallelIntervals.job_id >> None) & (
+            #            ParallelIntervals.task_id >> None) & (
+            #                ParallelIntervals.unique_id >> None)).limit(1)
+ 
+            unprocessed_intervals = list(unprocessed_intervals)
             if len(unprocessed_intervals) == 0:
                 logging.info("Finished all intervals. Exiting..")
                 break
 
             current_interval = unprocessed_intervals[0]
-            current_interval.job_id = job_id
-            current_interval.task_id = array_job_task_id
-            current_interval.unique_id = unique_8_digit_id
-            current_interval.started = 1
-            current_interval.started_date = started_date
-            current_interval.username = getpass.getuser()
-            current_interval.machine_hostname = os.getenv('HOSTNAME', '')[0:100]
-            current_interval.machine_average_load = os.getloadavg()[-1]
-            current_interval.save()
+
+            ParallelIntervals.update(
+                job_id = job_id, 
+                task_id = array_job_task_id, 
+                unique_id = unique_8_digit_id,
+                started = 1, 
+                started_date = started_date, 
+                username = getpass.getuser(), 
+                machine_hostname = os.getenv('HOSTNAME', '')[0:100], 
+                machine_average_load = os.getloadavg()[-1],
+                comments = str(current_interval.comments or "") + "__s_%s_id%s_%s" % (job_id, array_job_task_id, unique_8_digit_id)
+            ).where(ParallelIntervals.id == current_interval.id).execute()
+
+            db.execute_sql("UNLOCK TABLE")
 
         cmd = "%s --chrom %s --start-pos %s --end-pos %s" % (args.command,
             current_interval.chrom, current_interval.start_pos, current_interval.end_pos)
@@ -269,12 +274,14 @@ if not is_startup or args.run_local:
                              "output: %s") % (e.cmd, e.returncode, e.output.strip())
             current_interval.error_code = e.returncode
             current_interval.error_message = error_message
+            current_interval.comments = str(current_interval.comments or "") + "_id" + str(current_interval.task_id) + "_error_ret" + str(e.returncode)+"_msg"+e.output.strip()[0:10]
             current_interval.save()
             logging.info("interval: %s:%s-%s - failed: %s" % (current_interval.chrom, current_interval.start_pos, current_interval.end_pos, error_message))
         else:
             # finished
             current_interval.finished = 1
             current_interval.finished_date = datetime.datetime.now()
+            current_interval.comments = str(current_interval.comments or "") + "_id" + str(current_interval.task_id) + "_done"
             current_interval.save()
 
             logging.info("interval: %s:%s-%s - succeeded!" % (current_interval.chrom, current_interval.start_pos, current_interval.end_pos))

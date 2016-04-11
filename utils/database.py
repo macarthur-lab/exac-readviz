@@ -52,7 +52,7 @@ class _SharedVariantFields(_SharedMeta):
     started = peewee.BooleanField(default=0)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
-
+    comments = peewee.CharField(max_length=100)  # used for debugging 
 
 # create table for non-sensitive variant-level info for all ExAC variants -
 # it will later be exported to a web-accessible sqlite db that can be queried by
