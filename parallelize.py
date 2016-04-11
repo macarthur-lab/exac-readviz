@@ -218,9 +218,9 @@ if not is_startup or args.run_local:
     #    time.sleep(random.randint(1, 30)) # sleep between 0 and 60 seconds to avoid all tasks trying to aquire intervals at the same time
 
     unique_8_digit_id = random.randint(10**8, 10**9 - 1)  # don't use actual job id to avoid collisions in case this script has been restarted and the same job id is reused.
-    while True:
-        started_date = datetime.datetime.now()
 
+    task_started_time = datetime.datetime.now()
+    while True:
         # get next interval
         current_interval = None
         
@@ -239,13 +239,19 @@ if not is_startup or args.run_local:
             break
 
         current_interval = unprocessed_intervals[0]
+        interval_started_time = datetime.datetime.now()
+
+        hours_since_task_started = (interval_started_time - task_started_time).total_seconds()/3600
+        if hours_since_task_started > 3.5:
+            logging.info("SGE short queue time limit is getting close. Won't start another interval.")
+            break
 
         rows_updated = ParallelIntervals.update(
             job_id = job_id, 
             task_id = array_job_task_id, 
             unique_id = unique_8_digit_id,
             started = 1, 
-            started_date = started_date, 
+            started_date = interval_started_time, 
             username = getpass.getuser(), 
             machine_hostname = os.getenv('HOSTNAME', '')[0:100], 
             machine_average_load = os.getloadavg()[-1],
