@@ -24,11 +24,11 @@ reset_unfinished_intervals_in_important_genes = 0
 # set flags to execute particular sections of code
 reset_variants_with_transient_errors = 1
 reset_variants_with_fewer_than_expected_available_samples = 1
-#reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
+reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
 reset_variants_with_bams_in_db_but_not_on_disk = 1
-#reset_intervals_that_had_error_code = 1
 reset_variants_that_contain_unfinished_samples = 1
 reset_intervals_that_contain_unfinished_variants = 1
+#reset_intervals_that_had_error_code = 1
 reset_unifinished_intervals_to_clear_job_id = 1
 #run_stat_queries = 1
 
@@ -250,7 +250,6 @@ if reset_variants_with_bams_in_db_but_not_on_disk:
                 run_query("update sample as s "
                           "set s.finished=0, s.comments=NULL, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
                           "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom_or_hemi='%s' " % t[1:])
-
 
 if reset_variants_that_contain_unfinished_samples:
     print("=== reset_variants_that_contain_unfinished_samples ===")
