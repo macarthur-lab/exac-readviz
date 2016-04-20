@@ -2,11 +2,7 @@
 Utility methods for choosing bam samples to display for a particular ExAC variant.
 """
 
-from collections import defaultdict, OrderedDict
-import os
-import re
-import time
-
+from collections import OrderedDict
 
 def _is_hemizygous_segment(chrom, pos):
     """Utility method that takes a chromosome (eg. '1', '2', 'X'..) and a position integer and returns True if the
@@ -22,7 +18,7 @@ def _is_male(sex):
     elif sex == "f":
         return False
     else:
-        raise ValueError("Sample %s has unexpected value for sex: %s" % (sample_id, sex))
+        raise ValueError("Unexpected value for sex arg: %s" % sex)
 
 
 def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_index, genotypes, sample_id_include_status, sample_id_sex):
@@ -52,8 +48,10 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
     # filter all samples down to just samples that have the desired genotype and have include=YES
     relevant_samples = []  # a list of dicts
     for sample_id, (gt_ref, gt_alt, AD, DP, GQ) in genotypes.items():
+        counter['total'] += 1
         if gt_ref is None and gt_alt is None:
             continue
+        counter['has genotype'] += 1
 
         if het_or_hom_or_hemi == "het":
             if gt_ref == gt_alt:
@@ -68,8 +66,10 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
             if chrom in ('X', 'Y') and _is_male(sample_id_sex[sample_id]) and _is_hemizygous_segment(chrom, pos):
                 continue
         elif het_or_hom_or_hemi == "hemi" and chrom in ('X', 'Y'):
+            counter['hemizygous'] += 1
             if not _is_male(sample_id_sex[sample_id]) or not _is_hemizygous_segment(chrom, pos):
                 continue
+            counter['sex is male and hemizigous_segment'] += 1
 
             # check whether the allele with the most reads is the ref allele, in which case it's homozygous reference
             if max(AD) == AD[0]:
