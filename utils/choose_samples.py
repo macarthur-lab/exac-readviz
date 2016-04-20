@@ -2,6 +2,7 @@
 Utility methods for choosing bam samples to display for a particular ExAC variant.
 """
 
+from collections import defaultdict, OrderedDict
 import os
 import re
 import time
@@ -46,6 +47,8 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
     """
     assert het_or_hom_or_hemi in ["het", "hom", "hemi"], "Unexpected het_or_hom_or_hemi arg: %s" % het_or_hom_or_hemi
 
+    counter = OrderedDict()
+    
     # filter all samples down to just samples that have the desired genotype and have include=YES
     relevant_samples = []  # a list of dicts
     for sample_id, (gt_ref, gt_alt, AD, DP, GQ) in genotypes.items():
@@ -76,11 +79,16 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
 
         if DP < 10 or GQ < 20:
             continue  # skip samples that don't pass _Adj thresholds since they are not counted in the ExAC browser het/hom counts.
-
+        counter["passes GQ, DP"] = counter.get('passes GQ, DP', 0) + 1
+        
         if not sample_id_include_status[sample_id]:
             continue  # skip samples where include status != "YES"
 
+        counter["passes include"] = counter.get('passes include', 0) + 1
         relevant_samples.append( {"sample_id": sample_id, "GQ": GQ} )
+
+    for k in counter:
+        print("%s: %s" % (counter[k], k))
 
     # return samples in order from highest to lowest GQ.
     for sample in sorted(relevant_samples, key=lambda s: s["GQ"], reverse=True):
