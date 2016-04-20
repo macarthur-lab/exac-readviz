@@ -55,8 +55,8 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
 
     def vcf_row_parser(fields):
         """Takes a tuple of column values from a VCF row and return a tuple of (chrom, pos, ref, alt_alleles, n_het, n_hom, genotypes)
-        where alt_alleles, n_het, and n_hom are lists of strings, and genotypes is a dictionary that maps sample_id to a 4-tuple:
-        (gt_ref, gt_alt, GQ, DP)
+        where alt_alleles, n_het, and n_hom are lists of strings, and genotypes is a dictionary that maps sample_id to a 5-tuple:
+        (gt_ref, gt_alt, AD, DP, GQ)
         """
         chrom, pos, ref, alt_list, info = fields[0], fields[1], fields[3], fields[4].split(","), fields[7]
 
@@ -77,6 +77,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
 
         assert len(n_het_list) == len(alt_list), "%s:%s: Unexpected number of AC_Het: %s - %s" % (chrom, pos, n_het_list, "\t".join(fields[0:9]))
         assert len(n_hom_list) == len(alt_list), "%s:%s: Unexpected number of AC_Hom: %s - %s" % (chrom, pos, n_hom_list, "\t".join(fields[0:9]))
+        assert len(n_hemi_list) == len(alt_list), "%s:%s: Unexpected number of AC_Hemi: %s - %s" % (chrom, pos, n_hemi_list, "\t".join(fields[0:9]))
 
         sample_id_to_genotype = {}
         if valid_sample_ids is not None:
@@ -93,7 +94,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                 GT = genotype_values[GT_idx]
                 if GT == "./.":
                     gt_ref = gt_alt = None
-                    DP = GQ = None
+                    AD = DP = GQ = None
                 else:
                     gt_ref, gt_alt = GT.split("/")
                     try:
@@ -114,7 +115,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                         logging.error("ERROR: %s:%s - couldn't parse %s genotype: %s in %s" % (chrom, pos, sample_id, genotype, fields[0:8]))
                         # This error happens for genotypes like 1/1:0,0:.:6:70,6,0.
                         # set GQ, DP = 0 so this sample will be filtered out by the GQ<20,DP<10 filter
-                        AD = []
+                        AD = None
                         DP, GQ = 0
 
                 sample_id_to_genotype[sample_id] = (gt_ref, gt_alt, AD, DP, GQ)
