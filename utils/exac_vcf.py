@@ -47,9 +47,11 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                 logging.error("ERROR: vcf sample id '%s' is not in the vcf info table" % sample_id)
 
     expected_genotype_format = "GT:AD:DP:GQ:PL"
-    GT_idx = expected_genotype_format.split(":").index("GT")
-    GQ_idx = expected_genotype_format.split(":").index("GQ")
-    DP_idx = expected_genotype_format.split(":").index("DP")
+    genotype_format_fields = expected_genotype_format.split(":")
+    GT_idx = genotype_format_fields.index("GT")
+    AD_idx = genotype_format_fields.index("AD")
+    DP_idx = genotype_format_fields.index("DP")
+    GQ_idx = genotype_format_fields.index("GQ")
 
     def vcf_row_parser(fields):
         """Takes a tuple of column values from a VCF row and return a tuple of (chrom, pos, ref, alt_alleles, n_het, n_hom, genotypes)
@@ -91,7 +93,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                 GT = genotype_values[GT_idx]
                 if GT == "./.":
                     gt_ref = gt_alt = None
-                    GQ = DP = None
+                    DP = GQ = None
                 else:
                     gt_ref, gt_alt = GT.split("/")
                     try:
@@ -105,16 +107,17 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                         gt_ref = gt_alt = None
 
                     try:
-                        GQ = float(genotype_values[GQ_idx])
+                        AD = genotype_values[AD_idx].split(",")
                         DP = float(genotype_values[DP_idx])
+                        GQ = float(genotype_values[GQ_idx])
                     except ValueError:
                         logging.error("ERROR: %s:%s - couldn't parse %s genotype: %s in %s" % (chrom, pos, sample_id, genotype, fields[0:8]))
                         # This error happens for genotypes like 1/1:0,0:.:6:70,6,0.
                         # set GQ, DP = 0 so this sample will be filtered out by the GQ<20,DP<10 filter
-                        GQ = DP = 0
+                        AD = []
+                        DP, GQ = 0
 
-                sample_id_to_genotype[sample_id] = (gt_ref, gt_alt, GQ, DP)
-
+                sample_id_to_genotype[sample_id] = (gt_ref, gt_alt, AD, DP, GQ)
 
         return chrom, pos, ref, alt_list, n_het_list, n_hom_list, n_hemi_list, sample_id_to_genotype
 
