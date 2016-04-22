@@ -116,7 +116,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                         # This error happens for genotypes like 1/1:0,0:.:6:70,6,0.
                         # set GQ, DP = 0 so this sample will be filtered out by the GQ<20,DP<10 filter
                         AD = None
-                        DP, GQ = 0
+                        DP = GQ = 0
 
                 sample_id_to_genotype[sample_id] = (gt_ref, gt_alt, AD, DP, GQ)
 
