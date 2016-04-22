@@ -1,5 +1,5 @@
 """
-Utility methods for parsing the full ExAC vcf.
+Utility methods that can be used for parsing the full ExAC genotypes vcf or the sites VCF.
 
 Example usage:
 
@@ -108,7 +108,7 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
                         gt_ref = gt_alt = None
 
                     try:
-                        AD = genotype_values[AD_idx].split(",")
+                        AD = map(int, genotype_values[AD_idx].split(","))
                         DP = float(genotype_values[DP_idx])
                         GQ = float(genotype_values[GQ_idx])
                     except ValueError:
