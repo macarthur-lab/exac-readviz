@@ -144,18 +144,26 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     vr.save()
                     continue
 
-                # iterate over samples in order from best-to-show-for-readviz to worst
+                # look in the genotypes vcf to get sample ids to use for readviz, sorted in order from
+                # best-to-show-for-readviz to worst
                 failed_sample_counter = 0
                 chosen_reassembled_bams = []
-                for next_best_readviz_sample_id in best_for_readviz_sample_id_iter(
-                    chrom,
-                    minrep_pos,
-                    het_or_hom_or_hemi,
-                    alt_allele_index + 1,  # + 1 because 0 means REF in the genotype objects
-                    all_genotypes_in_row,
-                    EXAC_SAMPLE_ID_TO_INCLUDE_STATUS,
-                    EXAC_SAMPLE_ID_TO_SEX):
+                best_for_readviz_sample_ids = best_for_readviz_sample_id_iter(
+                        chrom,
+                        minrep_pos,
+                        het_or_hom_or_hemi,
+                        alt_allele_index + 1,  # + 1 because 0 means REF in the genotype objects
+                        all_genotypes_in_row,
+                        EXAC_SAMPLE_ID_TO_INCLUDE_STATUS,
+                        EXAC_SAMPLE_ID_TO_SEX)
 
+                # double-check that the n_hom, n_het, n_hemi
+                if n_expected_samples != len(best_for_readviz_sample_ids):
+                    raise ValueError("%s-%s-%s-%s %s - n_expected_samples != len(best_for_readviz_sample_ids): %s != %s" % (
+                        chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi,
+                        n_expected_samples, len(best_for_readviz_sample_ids)))
+
+                for next_best_readviz_sample_id in best_for_readviz_sample_ids:
                     try:
                         original_bam_path = lookup_original_bam_path(next_best_readviz_sample_id)
                         original_gvcf_path = EXAC_SAMPLE_ID_TO_GVCF_PATH[next_best_readviz_sample_id]
