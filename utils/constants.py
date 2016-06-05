@@ -32,14 +32,14 @@ EXAC_CALLING_INTERVALS_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regio
 EXAC_INFO_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3_meta_Final.tsv")
 EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
 EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
-EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC_HC.v3.1.final.vep.release.vcf.gz")
+EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3.1.sites.vep.vcf.gz")
 GENCODE_EXAC_GTF_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.gtf.gz")
 
 PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting bam
 
-GATK_JAR_PATH = os.path.abspath(os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
+GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+#    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
+    "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
 
 # used for igv screenshots
 GENCODE_BED_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.v19.sorted.bed")
