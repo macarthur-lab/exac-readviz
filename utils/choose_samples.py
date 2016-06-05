@@ -83,26 +83,42 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
             counter['sex is male and hemizigous_segment'] = counter.get('sex is male and hemizigous_segment', 0) + 1
 
             # check whether the allele with the most reads is the ref allele, in which case it's homozygous reference
-            if max(AD) not in AD[1:]:
+            if AD is None:
                 continue
+            if gt_ref != gt_alt:
+                if len(AD) > 2:
+                    # handle multiallelics using Monkol's AC_Hemi code
+                    max_ad = AD[gt_ref]
+                    hemi_allele_i = gt_ref
+                    for i in range(0, len(AD)):
+                        if AD[i] > max_ad:
+                            hemi_allele_i = i
+                    if hemi_allele_i != gt_ref:
+                        hemi_allele_i = gt_alt
+                    if hemi_allele_i != gt_alt:
+                        continue
+                elif AD[0] >= AD[1]:
+                    continue
+
             counter['AD supports alt allele'] = counter.get('AD supports alt allele', 0) + 1
+            print("%s  %s/%s:%s:%s:%s " % (sample_id, gt_ref, gt_alt, ",".join(map(str, AD)), DP, GQ))
         else:
             raise ValueError("Unexpected het_or_hom_or_hemi value: " + str(het_or_hom_or_hemi))
 
         if DP < 10 or GQ < 20:
             continue  # skip samples that don't pass _Adj thresholds since they are not counted in the ExAC browser het/hom counts.
         counter["passes GQ, DP"] = counter.get('passes GQ, DP', 0) + 1
-        
+
         if not sample_id_include_status[sample_id]:
             continue  # skip samples where include status != "YES"
         counter["include"] = counter.get('include', 0) + 1
 
         relevant_samples.append( {"sample_id": sample_id, "GQ": GQ} )
 
-    #   print(sample_id, (gt_ref, gt_alt, AD, DP, GQ))
-    #if het_or_hom_or_hemi == "hemi":
-    #    for k in counter:
-    #        print("%s: %s" % (counter[k], k))
+
+    if het_or_hom_or_hemi == "hemi":
+        for k in counter:
+            print("%s: %s" % (counter[k], k))
 
     # return sample ids in order from highest to lowest GQ.
     return [sample["sample_id"] for sample in sorted(relevant_samples, key=lambda s: s["GQ"], reverse=True)]
