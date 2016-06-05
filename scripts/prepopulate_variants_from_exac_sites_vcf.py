@@ -13,7 +13,7 @@ from utils.minimal_representation import get_minimal_representation
 
 p = argparse.ArgumentParser()
 p.add_argument("-p", "--exac-sites-vcf-path", help="ExAC sites VCF path", default=EXAC_SITES_VCF_PATH)
-p.add_argument("--chrom", help="Chromosome to process", required=True)
+p.add_argument("--chrom", help="Chromosome to process")
 args = p.parse_args()
 
 Variant.create_table(fail_silently=True)
