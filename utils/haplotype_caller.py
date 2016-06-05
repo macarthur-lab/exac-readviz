@@ -117,7 +117,7 @@ def run_haplotype_caller(
     absolute_output_dir = os.path.dirname(temp_output_bam_path)
     if not os.path.isdir(absolute_output_dir):
         logging.debug("creating directory: %s" % absolute_output_dir)
-        run("mkdir -m 777 -p %s" % absolute_output_dir)
+        run("mkdir -p %(absolute_output_dir)s; chmod 777 %(absolute_output_dir)s %(absolute_output_dir)s/.. " % locals())
 
 
     # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
@@ -193,7 +193,7 @@ def run_haplotype_caller(
             # save the output gvcf for debugging
             absolute_debug_dir = os.path.join(all_bam_output_dir, "debug", relative_output_dir)
             if not os.path.isdir(absolute_debug_dir):
-                run("mkdir -m 777 -p %s" % absolute_debug_dir)
+                run("mkdir -p %(absolute_debug_dir)s; chmod 777 %(absolute_debug_dir)s %(absolute_debug_dir)s/.." % locals())
 
             igv_tracks = []
             for file_to_save_for_debugging in files_to_delete_on_error:
