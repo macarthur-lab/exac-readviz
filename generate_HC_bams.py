@@ -12,6 +12,8 @@ configargparse.initArgumentParser(
     formatter_class=configargparse.ArgumentDefaultsHelpFormatter)
 
 import collections
+import datetime
+import getpass
 import gzip
 import pysam
 import re
@@ -56,46 +58,33 @@ def lookup_original_bam_path(sample_id):
     return bam_path
 
 
-def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**10):
-    """Generates HC-reassembled bams for all ExAC variants in this inteveral.
+def main(vcf_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
+    """Generates HC-reassembled bams for all ExAC variants in this interval.
 
     Args:
-        exac_full_vcf: The path of the full vcf
+        vcf_iterator: Iterator over VCF records
         bam_output_dir: Top level output dir for all bams
-        chrom: optional genomic region to limit processing
-        start_pos: integer 1-based inclusive start position of genomic region
-        end_pos: integer 1-based inclusive end position of genomic region
+        chrom: (optional) genomic region to limit processing
+        exit_after_minutes: (optional - integer) after this many minutes, finish processing the current variant and exit
     """
 
-    # parse the VCF
-    tabix_file = pysam.TabixFile(filename=exac_full_vcf, parser=pysam.asTuple())
-    last_header_line = list(tabix_file.header)[-1].decode("utf-8", "ignore")
-    if chrom:
-        logging.info("Processing variants in %s:%s-%s in %s" % (
-            chrom, start_pos, end_pos, exac_full_vcf))
-
-        if start_pos:
-            start_pos = start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
-
-        vcf_iterator = tabix_file.fetch(chrom, start_pos, end_pos)
-    else:
-        logging.info("Processing all variants in %s" % exac_full_vcf)
-        vcf_iterator = pysam.tabix_iterator(gzip.open(exac_full_vcf), parser=pysam.asTuple())
-
-    exac_sample_ids = set(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.keys())
-    parse_vcf_row = create_vcf_row_parser(last_header_line, exac_sample_ids)
+    # iterate over the VCF
+    main_started_time = datetime.datetime.now()
 
     counters = collections.defaultdict(int)
-    for row in vcf_iterator:
+    for chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, n_hemi_list, all_genotypes_in_row in vcf_iterator:
         counters["sites"] += 1
 
-        chrom, pos, ref, alt_alleles, n_het_list, n_hom_list, n_hemi_list, all_genotypes_in_row = parse_vcf_row(row)
+        if exit_after_minutes:
+            minutes_since_task_started = (datetime.datetime.now() - main_started_time).total_seconds()/3600
+            if minutes_since_task_started > exit_after_minutes:
+                logging.info("Time limit of %s minutes reached. Exiting..." % exit_after_minutes)
+                break
 
         # iterate over alt alleles (in case this row is multi-allelic)
         for alt_allele_index, (alt, n_het, n_hom, n_hemi) in enumerate(zip(alt_alleles, n_het_list, n_hom_list, n_hemi_list)):
 
-            minrep_pos, minrep_ref, minrep_alt = get_minimal_representation(
-                pos, ref, alt)
+            minrep_pos, minrep_ref, minrep_alt = get_minimal_representation(pos, ref, alt)
 
             # print some stats
             logging.info("-----")
@@ -123,8 +112,10 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                     counters[het_or_hom_or_hemi+"_alleles_already_done"] += 1
                     continue
 
-                vr.started = 1
-                vr.comments = str(vr.comments or "") + "_s"
+                vr.started=1
+                vr.started_time = datetime.datetime.now()
+                vr.username = getpass.getuser()[0:10]
+                #vr.comments = str(vr.comments or "") + "_s"
                 vr.save()
 
                 if het_or_hom_or_hemi == "het":
@@ -138,9 +129,10 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
 
                 if n_expected_samples == 0:
                     logging.info("%s-%s-%s-%s %s - has n_expected_samples == 0 - skipping.." % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi))
-                    vr.n_expected_samples=0
-                    vr.finished=1
-                    vr.comments = str(vr.comments or "") + "_n_expected=0"
+                    vr.n_expected_samples = 0
+                    vr.finished = 1
+                    vr.finished_time = datetime.datetime.now()
+                    #vr.comments = str(vr.comments or "") + "_n_expected=0"
                     vr.save()
                     continue
 
@@ -158,7 +150,7 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                         EXAC_SAMPLE_ID_TO_SEX)
 
                 # double-check that the n_hom, n_het, n_hemi
-                if n_expected_samples != len(best_for_readviz_sample_ids):
+                if abs(n_expected_samples - len(best_for_readviz_sample_ids)) > 0:
                     raise ValueError("%s-%s-%s-%s %s - n_expected_samples != len(best_for_readviz_sample_ids): %s != %s" % (
                         chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi,
                         n_expected_samples, len(best_for_readviz_sample_ids)))
@@ -202,19 +194,74 @@ def main(exac_full_vcf, bam_output_dir, chrom=None, start_pos=None, end_pos=10**
                 vr.n_failed_samples=failed_sample_counter
                 vr.readviz_bam_paths="|".join(chosen_reassembled_bams)
                 vr.finished=1
-                vr.comments = str(vr.comments or "") + "_done_%d_of_%d" % (vr.n_available_samples, vr.n_expected_samples)
+                vr.finished_time = datetime.datetime.now()
+                #vr.comments = str(vr.comments or "") + "_done_%d_of_%d" % (vr.n_available_samples, vr.n_expected_samples)
                 vr.save()
 
 
     logging.info(", ".join(["%s=%s" % (k, v) for k,v in sorted(counters.items(), key=lambda kv: kv[0])]),)
-    logging.info("generate_HC_bams finished: %s:%s-%s" % (chrom, start_pos, end_pos))
+    logging.info("generate_HC_bams finished.") # at %s:%s" % (chrom, pos))
+
+
+def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, end_pos=None):
+    """Iterate over variants in the tabix file that are marked as not-yet-finished in the variant table
+
+    Args:
+        tabix_file: pysam tabix file object
+        chrom: chromosome
+        start_pos: integer 1-based inclusive start position of genomic region
+        end_pos: integer 1-based inclusive end position of genomic region
+    Returns:
+        lines in the tabix file corresponding to unfinished variants
+    """
+
+    where_condition = (Variant.started == 0) & (Variant.finished == 0)
+    if chrom is not None:
+        where_condition = where_condition & (Variant.chrom == chrom)
+    if start_pos is not None:
+        where_condition = where_condition & (Variant.pos >= start_pos)
+    if end_pos is not None:
+        where_condition = where_condition & (Variant.pos <= end_pos)
+
+    while True:
+        # claim a variant to process
+        unprocessed_variants = Variant.select().where(where_condition).limit(1)
+        unprocessed_variants = list(unprocessed_variants)
+        if len(unprocessed_variants) == 0:
+            logging.info("Finished all variants. Exiting..")
+            break
+
+        current_variant = unprocessed_variants[0]
+        logging.info("Retrieving next variant..")
+        rows_updated = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition ).execute()
+
+        if rows_updated == 0:
+            logging.info("%s-%s-%s-%s - variant claimed by another task. Skipping.." % (
+                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt))
+
+        # for the current_variant, get the corresponding row from the VCF
+        for fields in tabix_file.fetch(str(current_variant.chrom), current_variant.pos-1, current_variant.pos+1):
+            logging.info("%s-%s-%s-%s - retrieved variant " % (
+                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt))
+            if int(fields[1]) == current_variant.pos:
+                yield fields
+                break
+        else:
+            raise Exception("Variant not found in fetch results: " + str(current_variant.__dict__))
+
 
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
     p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default=BAM_OUTPUT_DIR)
     p.add("--chrom", help="If specified, only process this chromosome")
     p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
-    p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
+    p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int, default=10**10)
+
+    p.add("--process-variant-table", action="store_true", help="If specified, then instead of iterating over the "
+        "ExAC genotypes vcf, process unfinished variants from the SQL variant table")
+    p.add("--exit-after", metavar="MINUTES", help="This many minutes after starting, finish processing "
+                                                  "the current variant and then exit", default=60*3.5, type=float)
+
     args = p.parse_args()
 
     logging.info("Running with settings: ")
@@ -229,9 +276,37 @@ if __name__ == "__main__":
 
     init_db()
 
-    main(exac_full_vcf=EXAC_FULL_VCF_PATH,
+    # initialize vcf iterator
+    exac_full_vcf = EXAC_FULL_VCF_PATH
+    tabix_file = pysam.TabixFile(filename=exac_full_vcf, parser=pysam.asTuple())
+    last_header_line = list(tabix_file.header)[-1].decode("utf-8", "ignore")
+    exac_sample_ids = set(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.keys())
+    parse_vcf_row = create_vcf_row_parser(last_header_line, exac_sample_ids)
+
+    if args.process_variant_table:
+        logging.info("Processing remaining variants in variant table")
+
+        vcf_row_iterator = create_iterator_from_variant_table(tabix_file, args.chrom, args.start_pos, args.end_pos)
+    elif args.chrom:
+        logging.info("Processing variants in %s:%s-%s in %s" % (args.chrom, args.start_pos, args.end_pos, exac_full_vcf))
+
+        if args.start_pos:
+            args.start_pos = args.start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
+
+        vcf_row_iterator = tabix_file.fetch(args.chrom, args.start_pos, args.end_pos)
+    else:
+        logging.info("Processing all variants in %s" % exac_full_vcf)
+        vcf_row_iterator = pysam.tabix_iterator(gzip.open(exac_full_vcf), parser=pysam.asTuple())
+
+    #if args.start_pos:
+    #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) >= args.start_pos)
+    #if args.end_pos:
+    #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) <= args.end_pos)
+
+    vcf_iterator = (parse_vcf_row(row) for row in vcf_row_iterator)
+
+    main(vcf_iterator=vcf_iterator,
          bam_output_dir=args.bam_output_dir,
          chrom=args.chrom,
-         start_pos=args.start_pos,
-         end_pos=args.end_pos,
+         exit_after_minutes=args.exit_after
     )
