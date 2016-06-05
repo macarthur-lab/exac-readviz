@@ -16,8 +16,11 @@ import datetime
 import getpass
 import gzip
 import pysam
+import random
 import re
+import time
 import traceback
+from peewee import fn
 
 from utils.database import init_db, Variant
 from utils.choose_samples import best_for_readviz_sample_id_iter
@@ -115,7 +118,7 @@ def main(vcf_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
                 vr.started=1
                 vr.started_time = datetime.datetime.now()
                 vr.username = getpass.getuser()[0:10]
-                #vr.comments = str(vr.comments or "") + "_s"
+                vr.comments = str(vr.comments or "") + "_s"
                 vr.save()
 
                 if het_or_hom_or_hemi == "het":
@@ -132,7 +135,7 @@ def main(vcf_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
                     vr.n_expected_samples = 0
                     vr.finished = 1
                     vr.finished_time = datetime.datetime.now()
-                    #vr.comments = str(vr.comments or "") + "_n_expected=0"
+                    vr.comments = str(vr.comments or "") + "_n_expected=0"
                     vr.save()
                     continue
 
@@ -195,7 +198,7 @@ def main(vcf_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
                 vr.readviz_bam_paths="|".join(chosen_reassembled_bams)
                 vr.finished=1
                 vr.finished_time = datetime.datetime.now()
-                #vr.comments = str(vr.comments or "") + "_done_%d_of_%d" % (vr.n_available_samples, vr.n_expected_samples)
+                vr.comments = str(vr.comments or "") + "_done_%d_of_%d" % (vr.n_available_samples, vr.n_expected_samples)
                 vr.save()
 
 
@@ -224,8 +227,8 @@ def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, e
         where_condition = where_condition & (Variant.pos <= end_pos)
 
     while True:
-        # claim a variant to process
-        unprocessed_variants = Variant.select().where(where_condition).limit(1)
+        # claim a variant to process. order_by random to avoid collisions with other threads/processes
+        unprocessed_variants = Variant.select().where(where_condition).order_by(fn.Rand()).limit(1)
         unprocessed_variants = list(unprocessed_variants)
         if len(unprocessed_variants) == 0:
             logging.info("Finished all variants. Exiting..")
@@ -233,11 +236,16 @@ def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, e
 
         current_variant = unprocessed_variants[0]
         logging.info("Retrieving next variant..")
-        rows_updated = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition ).execute()
+        with db.atomic() as txn:
+            query = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition )
+        rows_updated = query.execute()
 
         if rows_updated == 0:
-            logging.info("%s-%s-%s-%s - variant claimed by another task. Skipping.." % (
-                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt))
+            sleep_interval = random.randint(1, 15)
+            logging.info("%s-%s-%s-%s - variant claimed by another task. Skipping.. (sleep for %s sec)" % (
+                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt, sleep_interval))
+            time.sleep(sleep_interval) # sleep for a random time interval to avoid constant lock contension
+            continue
 
         # for the current_variant, get the corresponding row from the VCF
         for fields in tabix_file.fetch(str(current_variant.chrom), current_variant.pos-1, current_variant.pos+1):
@@ -274,7 +282,7 @@ if __name__ == "__main__":
         if not key.startswith("_"):
             logging.info("%s=%s" % (key, utils.constants.__dict__[key]))
 
-    init_db()
+    db = init_db()
 
     # initialize vcf iterator
     exac_full_vcf = EXAC_FULL_VCF_PATH
