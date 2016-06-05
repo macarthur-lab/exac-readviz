@@ -50,9 +50,11 @@ class _SharedVariantFields(_SharedMeta):
     alt = peewee.CharField(max_length=MAX_ALLELE_SIZE)
     het_or_hom_or_hemi = peewee.CharField(max_length=4)
     started = peewee.BooleanField(default=0)
+    started_time = peewee.DateTimeField(default=None, null=True)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
-    comments = peewee.CharField(max_length=100)  # used for debugging 
+    finished_time = peewee.DateTimeField(default=None, null=True)
+    comments = peewee.CharField(default='', null=True, max_length=100)  # used for debugging
 
 # create table for non-sensitive variant-level info for all ExAC variants -
 # it will later be exported to a web-accessible sqlite db that can be queried by
@@ -64,6 +66,7 @@ class Variant(_SharedVariantFields):
     n_available_samples = peewee.IntegerField(index=True, null=True)
     # list of bam paths to show (separated by '|') of size = n_available_samples
     readviz_bam_paths = peewee.TextField(default=None, null=True)
+    username = peewee.CharField(max_length=10, default=None, null=True)
 
     class Meta:
         indexes = (
@@ -92,8 +95,6 @@ class Sample(_SharedVariantFields):
     hc_n_artificial_haplotypes = peewee.IntegerField(default=None, index=True, null=True)
     hc_n_artificial_haplotypes_deleted = peewee.IntegerField(default=None, index=True, null=True)
 
-    hc_started_time = peewee.DateTimeField(default=None, null=True)
-    hc_finished_time = peewee.DateTimeField(default=None, null=True)
     hc_command_line = peewee.TextField(default=None, null=True)
 
     #screenshot_started = peewee.BooleanField(default=0)

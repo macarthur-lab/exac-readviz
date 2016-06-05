@@ -70,7 +70,7 @@ def run_haplotype_caller(
 
     sr.started = 1
     sr.comments = str(sr.comments or "")+"_s"  # started - used to check that started only once
-    sr.hc_started_time=datetime.datetime.now()
+    sr.started_time=datetime.datetime.now()
     sr.original_bam_path = original_bam_path
     sr.output_bam_path = output_bam_path
     sr.save()
@@ -246,7 +246,7 @@ def run_haplotype_caller(
 
     sr.comments = str(sr.comments or "") + "_succeeded"
     sr.finished = 1
-    sr.hc_finished_time = datetime.datetime.now()
+    sr.finished_time = datetime.datetime.now()
     sr.sample_i = sample_i
     sr.hc_succeeded = 1
     sr.save()
@@ -284,7 +284,7 @@ def run(command, verbose=False):
 def hc_failed(error_code, message, sample_record, files_to_delete=None):
     """Utility method for logging HC run failure"""
     sample_record.hc_failed = 1
-    sample_record.hc_finished_time = datetime.datetime.now()
+    sample_record.finished_time = datetime.datetime.now()
     sample_record.hc_error_code = error_code
     sample_record.hc_error_text = message
     sample_record.output_bam_path = None
