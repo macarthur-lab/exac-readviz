@@ -1,5 +1,3 @@
-
-import igv_api
 import logging
 import os
 from utils.constants import EXAC_CALLING_INTERVALS_BED_PATH, GENCODE_BED_PATH, \
@@ -18,6 +16,11 @@ def take_screenshots(chrom, pos, file_paths, file_output_dir=None):
       pos: pos
       file_paths: List of file paths to load.
     """
+    try:
+        import igv_api
+    except ImportError as e:
+        logging.error("Unable to import igv_api: " + str(e))
+        return
 
     logging.info("%s:%s - taking igv screenshots of %s files: %s" % (
         chrom, pos, len(file_paths), ", ".join(file_paths)))
