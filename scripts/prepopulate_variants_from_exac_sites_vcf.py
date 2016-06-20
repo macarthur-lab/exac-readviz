@@ -14,18 +14,21 @@ from utils.minimal_representation import get_minimal_representation
 p = argparse.ArgumentParser()
 p.add_argument("-p", "--exac-sites-vcf-path", help="ExAC sites VCF path", default=EXAC_SITES_VCF_PATH)
 p.add_argument("--chrom", help="Chromosome to process")
+p.add_argument("--restart", action="store_true", help="Restart loading from where it left off")
+
 args = p.parse_args()
 
 Variant.create_table(fail_silently=True)
 
-start_at_pos = 1
-#for v in Variant.select(fn.Max(Variant.pos).alias('max_pos')).where(Variant.chrom==args.chrom):
-#    start_at_pos = v.max_pos
-
-
 tabix_file = pysam.TabixFile(filename=args.exac_sites_vcf_path, parser=pysam.asTuple())
 last_header_line = list(tabix_file.header)[-1].decode("utf-8", "ignore")
 if args.chrom:
+    start_at_pos = 1
+    if args.restart:
+        variants_with_max_pos = list(Variant.select(fn.Max(Variant.pos).alias('pos')).where(Variant.chrom==args.chrom).limit(1))
+        if variants_with_max_pos:
+            start_at_pos = variants_with_max_pos[0].pos
+
     logging.info("Processing chromosome: %s starting at %s" % (args.chrom, start_at_pos))
     vcf_iterator = tabix_file.fetch(args.chrom, start_at_pos, 5*10**8)
 else:
