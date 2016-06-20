@@ -227,18 +227,24 @@ def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, e
         where_condition = where_condition & (Variant.pos <= end_pos)
 
     while True:
-        # claim a variant to process. order_by random to avoid collisions with other threads/processes
-        unprocessed_variants = Variant.select().where(where_condition).order_by(fn.Rand()).limit(1)
-        unprocessed_variants = list(unprocessed_variants)
-        if len(unprocessed_variants) == 0:
-            logging.info("Finished all variants. Exiting..")
-            break
-
-        current_variant = unprocessed_variants[0]
-        logging.info("Retrieving next variant..")
+        # claim a variant to process. 
         with db.atomic() as txn:
+            # order_by random to avoid collisions with other threads/processes
+            #unprocessed_variants = Variant.select().where(where_condition).order_by(fn.Rand()).limit(1)  # order_by(fn.Rand()) queries are too slow 
+            randomized_variant_num = random.randint(1, 200)
+            unprocessed_variants = Variant.select().where(where_condition).limit(randomized_variant_num)  # order_by(fn.Rand()) queries are too slow 
+            #logging.info("running query: " + str(unprocessed_variants.sql()))
+            unprocessed_variants = list(unprocessed_variants)
+            if len(unprocessed_variants) == 0:
+                logging.info("Finished all variants. Exiting..")
+                break
+
+            current_variant = unprocessed_variants[-1]  # pick the last one
+            logging.info("retrieving next variant..")
+
             query = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition )
-        rows_updated = query.execute()
+            logging.info("running query: " + str(query.sql()))
+            rows_updated = query.execute()
 
         if rows_updated == 0:
             sleep_interval = random.randint(1, 15)
