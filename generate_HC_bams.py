@@ -61,11 +61,11 @@ def lookup_original_bam_path(sample_id):
     return bam_path
 
 
-def main(vcf_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
+def main(variant_iterator, bam_output_dir, chrom=None, exit_after_minutes=None):
     """Generates HC-reassembled bams for all ExAC variants in this interval.
 
     Args:
-        vcf_iterator: Iterator over VCF records
+        variant_iterator: Iterator that returns 2-tuples of lines from the full VCF
         bam_output_dir: Top level output dir for all bams
         chrom: (optional) genomic region to limit processing
         exit_after_minutes: (optional - integer) after this many minutes, finish processing the current variant and exit
@@ -228,24 +228,27 @@ def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, e
 
     while True:
         # claim a variant to process. 
+        randomized_variant_num = random.randint(1, 200)
+        unprocessed_variants = Variant.select().where(where_condition).limit(randomized_variant_num)  # order_by(fn.Rand()).limit(1) queries are too slow 
+        unprocessed_variants_list = list(unprocessed_variants)
+        if len(unprocessed_variants_list) == 0:
+            logging.info("Finished all variants. Exiting..")
+            break
+
+        sql, params = unprocessed_variants.sql()
+        logging.info("query: %s \n rows retreived %s" % ( (sql % tuple(params)), len(unprocessed_variants_list)))
+
+        current_variant = unprocessed_variants_list[-1]  # pick the last one
+        logging.info("retrieving next variant id = %s: %s-%s-%s-%s %s" % (current_variant.id,
+            current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt, current_variant.het_or_hom_or_hemi))
+
         with db.atomic() as txn:
-            # order_by random to avoid collisions with other threads/processes
-            #unprocessed_variants = Variant.select().where(where_condition).order_by(fn.Rand()).limit(1)  # order_by(fn.Rand()) queries are too slow 
-            randomized_variant_num = random.randint(1, 200)
-            unprocessed_variants = Variant.select().where(where_condition).limit(randomized_variant_num)  # order_by(fn.Rand()) queries are too slow 
-            #logging.info("running query: " + str(unprocessed_variants.sql()))
-            unprocessed_variants = list(unprocessed_variants)
-            if len(unprocessed_variants) == 0:
-                logging.info("Finished all variants. Exiting..")
-                break
-
-            current_variant = unprocessed_variants[-1]  # pick the last one
-            logging.info("retrieving next variant..")
-
             query = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition )
-            logging.info("running query: " + str(query.sql()))
             rows_updated = query.execute()
-
+            
+        sql, params = query.sql()
+        logging.info("query: %s \n rows updated: %s" % ( (sql % tuple(params)), rows_updated))
+            
         if rows_updated == 0:
             sleep_interval = random.randint(1, 15)
             logging.info("%s-%s-%s-%s - variant claimed by another task. Skipping.. (sleep for %s sec)" % (
@@ -255,8 +258,8 @@ def create_iterator_from_variant_table(tabix_file, chrom=None, start_pos=None, e
 
         # for the current_variant, get the corresponding row from the VCF
         for fields in tabix_file.fetch(str(current_variant.chrom), current_variant.pos-1, current_variant.pos+1):
-            logging.info("%s-%s-%s-%s - retrieved variant " % (
-                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt))
+            logging.info("%s-%s-%s-%s %s - retrieved variant " % (
+                current_variant.chrom, current_variant.pos, current_variant.ref, current_variant.alt, current_variant.het_or_hom_or_hemi))
             if int(fields[1]) == current_variant.pos:
                 yield fields
                 break
@@ -300,26 +303,27 @@ if __name__ == "__main__":
     if args.process_variant_table:
         logging.info("Processing remaining variants in variant table")
 
-        vcf_row_iterator = create_iterator_from_variant_table(tabix_file, args.chrom, args.start_pos, args.end_pos)
-    elif args.chrom:
-        logging.info("Processing variants in %s:%s-%s in %s" % (args.chrom, args.start_pos, args.end_pos, exac_full_vcf))
-
-        if args.start_pos:
-            args.start_pos = args.start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
-
-        vcf_row_iterator = tabix_file.fetch(args.chrom, args.start_pos, args.end_pos)
+        vcf_row_iterator = create_variant_iterator_from_variant_table(tabix_file, args.chrom, args.start_pos, args.end_pos)
     else:
-        logging.info("Processing all variants in %s" % exac_full_vcf)
-        vcf_row_iterator = pysam.tabix_iterator(gzip.open(exac_full_vcf), parser=pysam.asTuple())
+        if args.chrom:
+            logging.info("Processing variants in %s:%s-%s in %s" % (args.chrom, args.start_pos, args.end_pos, exac_full_vcf))
+            
+            if args.start_pos:
+                args.start_pos = args.start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
 
-    #if args.start_pos:
-    #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) >= args.start_pos)
-    #if args.end_pos:
-    #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) <= args.end_pos)
+            vcf_row_iterator = tabix_file.fetch(args.chrom, args.start_pos, args.end_pos)
+        else:
+            logging.info("Processing all variants in %s" % exac_full_vcf)
+            vcf_row_iterator = pysam.tabix_iterator(gzip.open(exac_full_vcf), parser=pysam.asTuple())
 
-    vcf_iterator = (parse_vcf_row(row) for row in vcf_row_iterator)
+        #if args.start_pos:
+        #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) >= args.start_pos)
+        #if args.end_pos:
+        #    vcf_row_iterator = (row for row in vcf_row_iterator if int(row[1]) <= args.end_pos)
+        
+        variant_iterator = create_variant_iterator_from_vcf(vcf_row_iterator)
 
-    main(vcf_iterator=vcf_iterator,
+    main(variant_iterator=variant_iterator,
          bam_output_dir=args.bam_output_dir,
          chrom=args.chrom,
          exit_after_minutes=args.exit_after
