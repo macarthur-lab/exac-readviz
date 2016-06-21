@@ -18,6 +18,8 @@ import gzip
 import pysam
 import random
 import re
+import signal
+import sys
 import time
 import traceback
 from peewee import fn
@@ -60,6 +62,14 @@ def lookup_original_bam_path(sample_id):
     return bam_path
 
 
+CTRL_C_SIGNAL = False
+def signal_handler(signal, frame):
+    global CTRL_C_SIGNAL
+    CTRL_C_SIGNAL = True
+    logging.info("Ctrl-C pressed")
+    
+signal.signal(signal.SIGINT, signal_handler)
+
 def main(variant_iterator, bam_output_dir, exit_after_minutes=None):
     """Generates HC-reassembled bams for all ExAC variants in this interval.
 
@@ -68,7 +78,7 @@ def main(variant_iterator, bam_output_dir, exit_after_minutes=None):
         bam_output_dir: Top level output dir for all bams
         exit_after_minutes: (optional - integer) after this many minutes, finish processing the current variant and exit
     """
-
+    
     # iterate over the VCF
     main_started_time = datetime.datetime.now()
 
@@ -87,6 +97,9 @@ def main(variant_iterator, bam_output_dir, exit_after_minutes=None):
             if minutes_since_task_started > exit_after_minutes:
                 logging.info("Time limit of %s minutes reached. Exiting..." % exit_after_minutes)
                 break
+        if CTRL_C_SIGNAL:
+            logging.info("Interrupted. Exiting...")
+            break
 
         # check if allele has been processed already (skip if yes)
         vr, created = Variant.get_or_create(chrom=chrom, pos=pos, ref=ref, alt=alt, het_or_hom_or_hemi=het_or_hom_or_hemi)
@@ -207,8 +220,8 @@ def create_variant_record_iterator(chrom=None, start_pos=None, end_pos=None):
             logging.info("Finished all variants. Exiting..")
             break
 
-        sql, params = unprocessed_variants.sql()
-        logging.info("query: %s \n rows retreived %s" % ( (sql % tuple(params)), len(unprocessed_variants_list)))
+        #sql, params = unprocessed_variants.sql()
+        #logging.info("query: %s \n rows retreived %s" % ( (sql % tuple(params)), len(unprocessed_variants_list)))
 
         current_variant = unprocessed_variants_list[-1]  # pick the last one
         logging.info("retrieving next variant id = %s: %s-%s-%s-%s %s" % (current_variant.id,
@@ -218,8 +231,8 @@ def create_variant_record_iterator(chrom=None, start_pos=None, end_pos=None):
             query = Variant.update(started=1).where( (Variant.id == current_variant.id) & where_condition )
             rows_updated = query.execute()
 
-        sql, params = query.sql()
-        logging.info("query: %s \n rows updated: %s" % ( (sql % tuple(params)), rows_updated))
+        #sql, params = query.sql()
+        #logging.info("query: %s \n rows updated: %s" % ( (sql % tuple(params)), rows_updated))
 
         if rows_updated == 0:
             sleep_interval = random.randint(1, 15)
