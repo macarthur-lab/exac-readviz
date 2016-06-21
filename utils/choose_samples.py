@@ -115,7 +115,6 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
 
         relevant_samples.append( {"sample_id": sample_id, "GQ": GQ} )
 
-
     if het_or_hom_or_hemi == "hemi":
         for k in counter:
             print("%s: %s" % (counter[k], k))

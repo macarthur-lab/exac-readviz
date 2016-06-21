@@ -11,7 +11,6 @@ from utils.postprocess_reassembled_bam import postprocess_bam
 from utils.check_gvcf import check_gvcf
 from utils.database import Sample
 from utils.exac_calling_intervals import get_adjacent_calling_intervals
-from utils.screenshots import take_screenshots
 from utils.constants import NUM_OUTPUT_DIRECTORIES_L1, INCLUDE_N_ADJACENT_CALLING_REGIONS, MAX_ALLELE_SIZE, GATK_JAR_PATH
 from utils.file_utils import does_file_exist, retry_if_IOError
 
@@ -27,9 +26,9 @@ MAX_LINUX_FILENAME_LENGTH = 280
 
 def run_haplotype_caller(
         chrom,
-        minrep_pos,
-        minrep_ref,
-        minrep_alt,
+        pos,
+        ref,
+        alt,
         het_or_hom_or_hemi,
         original_bam_path,
         original_gvcf_path,
@@ -57,17 +56,18 @@ def run_haplotype_caller(
     # if finished already, just return
     sr, created = Sample.get_or_create(
         chrom=chrom,
-        pos=minrep_pos,
-        ref=minrep_ref,
-        alt=minrep_alt,
+        pos=pos,
+        ref=ref,
+        alt=alt,
         het_or_hom_or_hemi=het_or_hom_or_hemi,
         sample_id=sample_id)
 
-    output_bam_path = compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i)
+    output_bam_path = compute_output_bam_path(chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i)
     if sr.finished and sr.output_bam_path == output_bam_path:
-        #logging.info("%s-%s-%s-%s - %s - already done " % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id))
+        #logging.info("%s-%s-%s-%s - %s - already done " % (chrom, pos, ref, alt, sample_id))
         return (sr.hc_succeeded, sr.output_bam_path)
 
+    sr.variant_id = "%s-%s-%s-%s" % (chrom, pos, ref, alt)
     sr.started = 1
     sr.comments = str(sr.comments or "")+"_s"  # started - used to check that started only once
     sr.started_time=datetime.datetime.now()
@@ -75,9 +75,9 @@ def run_haplotype_caller(
     sr.output_bam_path = output_bam_path
     sr.save()
 
-    logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
+    logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
     if not does_file_exist(sr.original_bam_path):
-        logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, ".bam not found", original_bam_path))
+        logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, ".bam not found", original_bam_path))
 
         sr.finished=1
         hc_failed(ERROR_ORIGINAL_BAM_NOT_FOUND, None, sr)
@@ -87,7 +87,7 @@ def run_haplotype_caller(
     # look up the exac calling interval that spans this variant, as well as its 2 adjacent intervals on either side
     left_i, i, right_i = get_adjacent_calling_intervals(
                             chrom,
-                            minrep_pos,
+                            pos,
                             n_left=INCLUDE_N_ADJACENT_CALLING_REGIONS,
                             n_right=INCLUDE_N_ADJACENT_CALLING_REGIONS)
 
@@ -159,7 +159,7 @@ def run_haplotype_caller(
     sr.hc_command_line = " ".join(gatk_cmd)
 
     try:
-        logging.info("%s-%s-%s-%s %s - %s%s - launching HC %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, " ".join(dash_L_intervals)))
+        logging.info("%s-%s-%s-%s %s - %s%s - launching HC %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, " ".join(dash_L_intervals)))
         logging.info(sr.hc_command_line)
         #os.system(" ".join(gatk_cmd))
         cmd_output = subprocess.check_output(gatk_cmd, stderr=subprocess.STDOUT).decode()
@@ -178,9 +178,9 @@ def run_haplotype_caller(
 
     # check GVCF against original GVCF call
     if not sr.is_missing_original_gvcf:
-        logging.info("%s-%s-%s-%s %s - %s%s - checking gvcfs" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
+        logging.info("%s-%s-%s-%s %s - %s%s - checking gvcfs" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
         gvcf_calls_matched, mismatch_error_code, mismatch_error_text = retry_if_IOError(
-            check_gvcf, sr.original_gvcf_path, temp_output_gvcf_path, chrom, minrep_pos)
+            check_gvcf, sr.original_gvcf_path, temp_output_gvcf_path, chrom, pos)
 
         if not gvcf_calls_matched:
             sr.finished=1
@@ -188,7 +188,7 @@ def run_haplotype_caller(
             hc_failed(error_code, mismatch_error_text, sr)
 
             logging.info("%s-%s-%s-%s %s - %s%s - gvcfs mimatch: %s - %s" % (
-                chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, error_code, mismatch_error_text))
+                chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, error_code, mismatch_error_text))
 
             # save the output gvcf for debugging
             absolute_debug_dir = os.path.join(all_bam_output_dir, "debug", relative_output_dir)
@@ -212,27 +212,27 @@ def run_haplotype_caller(
             run("ln -s -f %s %s" % (original_gvcf_path + ".tbi", symlink_path + ".tbi"))
 
             # no more screenshots needed
-            #take_screenshots(chrom, minrep_pos, igv_tracks, absolute_debug_dir)
+            #take_screenshots(chrom, pos, igv_tracks, absolute_debug_dir)
 
             return (False, None)
         else:
             run("rm -f %s" % temp_output_gvcf_path)
             run("rm -f %s" % (temp_output_gvcf_path+".idx"))
 
-    logging.info("%s-%s-%s-%s %s - %s%s - post-processing bams" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id))
+    logging.info("%s-%s-%s-%s %s - %s%s - post-processing bams" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
     # postprocess and move output bam from temp_output_bam_path to output_bam_path
     # strip out read groups, read ids, tags, etc. to remove any sensitive info and reduce bam size
     final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
 
     run("rm -f %s" % final_output_bam_path)
     (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes, sr.hc_n_artificial_haplotypes_deleted) = retry_if_IOError(
-        postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, minrep_pos, minrep_ref, minrep_alt)
+        postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, pos, ref, alt)
 
     run("rm -f %s" % temp_output_bam_path)
     run("chmod 666 %s" % final_output_bam_path)  # in case different users run this script
 
     if is_reassembled_bam_empty:
-        logging.info("%s-%s-%s-%s - %s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, sample_id, "reassembled bam is empty"))
+        logging.info("%s-%s-%s-%s - %s - %s" % (chrom, pos, ref, alt, sample_id, "reassembled bam is empty"))
 
         files_to_delete_on_error.append( final_output_bam_path )
         files_to_delete_on_error.append( final_output_bam_path+".bai" )
@@ -251,22 +251,22 @@ def run_haplotype_caller(
     sr.hc_succeeded = 1
     sr.save()
 
-    logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, sample_id, "done!"))
+    logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, "done!"))
     return (True, sr.output_bam_path)
 
 
-def compute_output_bam_path(chrom, minrep_pos, minrep_ref, minrep_alt, het_or_hom_or_hemi, sample_i, suffix=""):
+def compute_output_bam_path(chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, suffix=""):
     """Computes the reassembled bam output path"""
 
-    output_dir = "%s/%03d" % (chrom, minrep_pos % NUM_OUTPUT_DIRECTORIES_L1) # minrep_pos % NUM_OUTPUT_DIRECTORIES_L2)
+    output_dir = "%s/%03d" % (chrom, pos % NUM_OUTPUT_DIRECTORIES_L1) # pos % NUM_OUTPUT_DIRECTORIES_L2)
 
     max_allele_size = min(MAX_ALLELE_SIZE, MAX_LINUX_FILENAME_LENGTH - 40)
 
     output_bam_filename = "chr%s-%s-%s-%s_%s%s%s.bam" % (
         chrom,
-        minrep_pos,
-        minrep_ref[:max_allele_size],
-        minrep_alt[:max_allele_size],
+        pos,
+        ref[:max_allele_size],
+        alt[:max_allele_size],
         het_or_hom_or_hemi,
         sample_i,
         suffix)

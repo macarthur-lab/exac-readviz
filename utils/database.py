@@ -45,16 +45,20 @@ class ExacCallingInterval(_SharedMeta):
 # fields shared by Variant and Sample tables
 class _SharedVariantFields(_SharedMeta):
     chrom = peewee.CharField(max_length=5, null=False, index=True)
-    pos = peewee.IntegerField()
-    ref= peewee.CharField(max_length=MAX_ALLELE_SIZE)
-    alt = peewee.CharField(max_length=MAX_ALLELE_SIZE)
-    het_or_hom_or_hemi = peewee.CharField(max_length=4)
+    pos = peewee.IntegerField(null=False)
+    ref = peewee.CharField(max_length=MAX_ALLELE_SIZE, null=False)
+    alt = peewee.CharField(max_length=MAX_ALLELE_SIZE, null=False)
+    het_or_hom_or_hemi = peewee.CharField(max_length=4, null=False)
+
+    variant_id = peewee.CharField(max_length=5+1+10+1+MAX_ALLELE_SIZE+1+MAX_ALLELE_SIZE, null=True)  #eg. "X-12345-G-T"
+
     started = peewee.BooleanField(default=0)
     started_time = peewee.DateTimeField(default=None, null=True)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
     finished = peewee.BooleanField(default=0)
     finished_time = peewee.DateTimeField(default=None, null=True)
     comments = peewee.CharField(default='', null=True, max_length=100)  # used for debugging
+
 
 # create table for non-sensitive variant-level info for all ExAC variants -
 # it will later be exported to a web-accessible sqlite db that can be queried by
@@ -125,7 +129,6 @@ def _create_table(model, fail_silently=True):
     # create table as a compressed TokuDB table
     db = model._meta.database
     indexes = model._meta.indexes
-
     raw_query = db.compiler().create_table(model, safe=fail_silently)
     raw_query = list(raw_query)
 
