@@ -27,7 +27,7 @@ def does_file_exist(file_path, num_retries=3, use_cache=True):
     for retry_counter in range(num_retries):
         if os.access(file_path, os.R_OK):
             return True
-        time.sleep(1)
+        time.sleep(2*retry_counter + 1)  # sleep for an increasing amount of time
     else:
         if use_cache:
             _missing_files_cache.add(file_path)
