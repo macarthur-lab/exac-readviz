@@ -41,6 +41,8 @@ GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__f
 #    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
     "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
 
+TCGA_NEW_BAM_PATHS = os.path.join(DATA_DIR_PREFIX, "TCGA_external_cghublink_batch1.tsv")
+
 # used for igv screenshots
 GENCODE_BED_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.v19.sorted.bed")
 EXAC_CALLING_INTERVALS_BED_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regions.v1.bed")
@@ -54,7 +56,8 @@ all_files_exist = True
 for path in (EXAC_CALLING_INTERVALS_PATH, EXAC_INFO_TABLE_PATH,
              EXAC_POP_SEX_TABLE_PATH, EXAC_FULL_VCF_PATH, EXAC_SITES_VCF_PATH,
              EXAC_SITES_VCF_PATH, GENCODE_EXAC_GTF_PATH,
-             PICARD_JAR_PATH, GATK_JAR_PATH):
+             PICARD_JAR_PATH, GATK_JAR_PATH,
+             TCGA_NEW_BAM_PATHS):
     if not does_file_exist(path, use_cache=False):
         logging.error("ERROR: file not found: " + path)
         all_files_exist = False
