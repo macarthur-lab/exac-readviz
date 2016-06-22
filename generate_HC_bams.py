@@ -17,9 +17,7 @@ import getpass
 import gzip
 import pysam
 import random
-import re
 import signal
-import sys
 import time
 import traceback
 from peewee import fn
@@ -27,8 +25,8 @@ from peewee import fn
 from utils.database import init_db, Variant
 from utils.choose_samples import best_for_readviz_sample_id_iter
 from utils.constants import MAX_SAMPLES_TO_SHOW_PER_VARIANT, EXAC_FULL_VCF_PATH, BAM_OUTPUT_DIR
-from utils.exac_info_table import EXAC_SAMPLE_ID_TO_BAM_PATH, EXAC_SAMPLE_ID_TO_GVCF_PATH, \
-    EXAC_SAMPLE_ID_TO_INCLUDE_STATUS, EXAC_SAMPLE_ID_TO_SEX
+from utils.exac_info_table import EXAC_SAMPLE_ID_TO_GVCF_PATH, EXAC_SAMPLE_ID_TO_INCLUDE_STATUS, EXAC_SAMPLE_ID_TO_SEX
+from utils.exac_info_table import lookup_original_bam_path
 from utils.exac_vcf import create_vcf_row_parser, create_variant_iterator_from_vcf
 from utils.haplotype_caller import run_haplotype_caller
 
@@ -40,28 +38,6 @@ logging.basicConfig(
     datefmt='%m/%d/%Y %I:%M:%S %p')
 
 
-def lookup_original_bam_path(sample_id):
-    """Look up the bam path for the given sample id.
-
-    Args:
-      sample_id: vcf sample id
-    Return:
-      The original bam path
-    """
-
-    # work-arounds for relocated .bams based on @birndle's igv_spot_checking script
-    bam_path = EXAC_SAMPLE_ID_TO_BAM_PATH[sample_id]
-    if "/cga/pancan2/picard_bams/ext_tcga" in bam_path:
-        bam_path = bam_path.replace("/cga/pancan2/", "/cga/fh/cga_pancan2/")
-
-    if "CONT_" in bam_path:
-        bam_path = bam_path.replace("CONT_", "CONT")
-
-    bam_path = re.sub("/v[0-9]{1,2}/", "/current/", bam_path)  # get latest version of the bam
-
-    return bam_path
-
-
 CTRL_C_SIGNAL = False
 def signal_handler(signal, frame):
     global CTRL_C_SIGNAL
@@ -69,6 +45,7 @@ def signal_handler(signal, frame):
     logging.info("Ctrl-C pressed")
     
 signal.signal(signal.SIGINT, signal_handler)
+
 
 def main(variant_iterator, bam_output_dir, exit_after_minutes=None):
     """Generates HC-reassembled bams for all ExAC variants in this interval.

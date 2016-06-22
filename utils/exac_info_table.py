@@ -12,9 +12,11 @@ the data:
 
 import logging
 import os
+import re
+from tqdm import tqdm
 
 from utils.constants import EXAC_INFO_TABLE_PATH, EXAC_POP_SEX_TABLE_PATH
-
+from utils.constants import TCGA_NEW_BAM_PATHS
 
 def parse_exac_info_table(info_table_path):
     # parse the ExAC info table to populate the following 3 dictionaries
@@ -100,3 +102,55 @@ assert n_male + n_female == len(EXAC_SAMPLE_ID_TO_POP), \
 
 logging.info("Loaded %s" % EXAC_POP_SEX_TABLE_PATH)
 logging.info("%d male, %d female" % (n_male, n_female))
+
+
+
+
+# Parse the new TCGA bam paths
+with open(TCGA_NEW_BAM_PATHS) as f:
+    for line in f:
+        fields = line.strip('\n').split('\t')
+        tcga_sample_id = fields[0]
+
+        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_GVCF_PATH
+        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_BAM_PATH
+
+        tcga_gvcf_path = fields[5]
+        tcga_bam_path = fields[-1]
+
+        #if not os.path.isfile(tcga_gvcf_path): print("ERROR: vcf file not found: " + tcga_gvcf_path)
+        #if not os.path.isfile(tcga_bam_path): print("ERROR: bam file not found: " + tcga_gvcf_path)
+
+        assert EXAC_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] == tcga_gvcf_path
+        #print('---\n%s\n%s' % (EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id], tcga_bam_path))
+
+        EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = tcga_bam_path
+
+
+
+def lookup_original_bam_path(sample_id):
+    """Look up the bam path for the given sample id.
+
+    Args:
+      sample_id: vcf sample id
+    Return:
+      The original bam path
+    """
+
+    # work-arounds for relocated .bams taken from @birndle's igv_spot_checking script
+    bam_path = EXAC_SAMPLE_ID_TO_BAM_PATH[sample_id]
+
+    #if "/cga/pancan2/picard_bams/ext_tcga" in bam_path:
+    #    bam_path = bam_path.replace("/cga/pancan2/", "/cga/fh/cga_pancan2/")
+
+    if "/C1437/" in bam_path:
+        d, n = os.path.split(bam_path)
+        prefix = n.replace(".bam", "")
+        new_prefix = prefix.replace("_", "")
+        bam_path = os.path.join(d.replace(prefix, new_prefix), new_prefix+".bam")
+    elif "CONT_" in bam_path:
+        bam_path = bam_path.replace("CONT_", "CONT")
+
+    bam_path = re.sub("/v[0-9]{1,2}/", "/current/", bam_path)  # get latest version of the bam
+
+    return bam_path
