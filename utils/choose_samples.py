@@ -1,7 +1,7 @@
 """
 Utility methods for choosing bam samples to display for a particular ExAC variant.
 """
-
+import logging
 from collections import OrderedDict
 
 def _is_hemizygous_segment(chrom, pos):
@@ -54,10 +54,10 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
     # filter all samples down to just samples that have the desired genotype and have include=YES
     relevant_samples = []  # a list of dicts
     for sample_id, (gt_ref, gt_alt, AD, DP, GQ) in genotypes.items():
-        counter['total'] = counter.get('total', 0) + 1
+        counter['total samples'] = counter.get('total samples', 0) + 1
         if gt_ref is None and gt_alt is None:
             continue
-        counter['has_genotype'] = counter.get('has_genotype', 0) + 1
+        counter['sample genotype is not ./.'] = counter.get('sample genotype is not ./.', 0) + 1
 
         if het_or_hom_or_hemi == "het":
             if gt_ref == gt_alt:
@@ -80,7 +80,7 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
 
             if not _is_hemizygous(chrom, pos, sample_id_sex[sample_id]):
                 continue
-            counter['sex is male and hemizigous_segment'] = counter.get('sex is male and hemizigous_segment', 0) + 1
+            counter['sample sex == male and chrom, pos in hemizigous_segment'] = counter.get('sample sex == male and chrom, pos in hemizigous_segment', 0) + 1
 
             # check whether the allele with the most reads is the ref allele, in which case it's homozygous reference
             if AD is None:
@@ -100,24 +100,24 @@ def best_for_readviz_sample_id_iter(chrom, pos, het_or_hom_or_hemi, alt_allele_i
                 elif AD[0] >= AD[1]:
                     continue
 
-            counter['AD supports alt allele'] = counter.get('AD supports alt allele', 0) + 1
-            print("%s  %s/%s:%s:%s:%s " % (sample_id, gt_ref, gt_alt, ",".join(map(str, AD)), DP, GQ))
+            counter['AD alt > AD ref'] = counter.get('AD alt > AD ref', 0) + 1
+            logging.info("%s  %s/%s:%s:%s:%s " % (sample_id, gt_ref, gt_alt, ",".join(map(str, AD)), DP, GQ))
         else:
             raise ValueError("Unexpected het_or_hom_or_hemi value: " + str(het_or_hom_or_hemi))
 
         if DP < 10 or GQ < 20:
             continue  # skip samples that don't pass _Adj thresholds since they are not counted in the ExAC browser het/hom counts.
-        counter["passes GQ, DP"] = counter.get('passes GQ, DP', 0) + 1
+        counter["sample passes DP>=10 and GQ>=20"] = counter.get('sample passes DP>=10 and GQ>=20', 0) + 1
 
         if not sample_id_include_status[sample_id]:
             continue  # skip samples where include status != "YES"
-        counter["include"] = counter.get('include', 0) + 1
+        counter["INCLUDE status == YES"] = counter.get('INCLUDE status == YES', 0) + 1
 
         relevant_samples.append( {"sample_id": sample_id, "GQ": GQ} )
 
     if het_or_hom_or_hemi == "hemi":
         for k in counter:
-            print("%s: %s" % (counter[k], k))
+            logging.info("   --- hemi counts: %s: %s" % (counter[k], k))
 
     # return sample ids in order from highest to lowest GQ.
     return [sample["sample_id"] for sample in sorted(relevant_samples, key=lambda s: s["GQ"], reverse=True)]
