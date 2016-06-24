@@ -3,5 +3,7 @@ configargparse
 igv_plotter
 mysql-connector-python-rf
 peewee
+pyinstrument
 pysam
 pyvcf
+tqdm
