@@ -14,6 +14,7 @@ BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
 
 # how many samples to show per het, hom-alt or hemizygous variant in the exac browser.
 MAX_SAMPLES_TO_SHOW_PER_VARIANT = 5
+BACKUP_SAMPLES_IN_CASE_OF_ERRORS = 5
 
 # in ExAC v3 the max ref allele is 325bp long, and max alt allele is 365bp long, so use 500 to be safe.
 MAX_ALLELE_SIZE = 500  # nucleotides
