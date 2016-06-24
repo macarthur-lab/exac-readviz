@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.4
+#!/usr/bin/env python2.7
 
 """
 This script takes the name of another python script (let's say some_script.py)
@@ -23,19 +23,24 @@ import argparse
 import datetime
 import os
 import peewee
-import playhouse.pool
 import getpass
 import random
+import signal
 import slugify
 import subprocess
-import sys
-import time
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
 #logging.getLogger('peewee').setLevel(logging.DEBUG)
 
+CTRL_C_SIGNAL = False
+def signal_handler(signal, frame):
+    global CTRL_C_SIGNAL
+    CTRL_C_SIGNAL = True
+    logging.info("Ctrl-C pressed")
+
+signal.signal(signal.SIGINT, signal_handler)
 
 p = argparse.ArgumentParser()
 p.add_argument("-L", "--interval-list", help="An interval file")
@@ -48,7 +53,7 @@ p.add_argument("--regenerate-intervals-table", help="Regenerate intervals table 
 p.add_argument("command", nargs="+", help="The command to parallelize. The command must work with --chrom, --start-pos, --end-pos")
 
 args, unknown_args = p.parse_known_args()
-db_table_name = "%s_i%d" % ("_".join([a for a in args.command + unknown_args if not a.startswith("-")][0:2]), args.interval_size)
+db_table_name = "%s_i%d" % ("_".join([a[0:8] for a in args.command + unknown_args if not a.startswith("-")][0:2]), args.interval_size)
 db_table_name = slugify.slugify(db_table_name).replace("-", "_")  # remove special chars
 
 args.command = " ".join(args.command + unknown_args)
@@ -155,7 +160,6 @@ if is_startup:
             batch = final_intervals[batch_start: batch_start + insert_batch_size]
             ParallelIntervals.insert_many(batch).execute()
 
-
         assert ParallelIntervals.select().count() == len(final_intervals), \
             "Number of intervals in database (%s) != expected number (%s)" % (
                 ParallelIntervals.select().count(), len(final_intervals))
@@ -168,7 +172,7 @@ if is_startup:
         if args.run_on_LSF:
             launch_array_job_cmd = (
                 "bsub -N -J prog[1-%(num_jobs)s] -o %(log_dir)s -q hour "
-                    "python3.4 parallelize.py -isize %(interval_size)s %(command)s"
+                    "python2.7 parallelize.py -isize %(interval_size)s %(command)s"
             )
         else:
             launch_array_job_cmd = ("qsub -q short "
@@ -177,7 +181,7 @@ if is_startup:
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
-                "./run_python.sh python3.4 parallelize.py "
+                "./run_python.sh python2.7 parallelize.py "
                                     "-isize %(interval_size)s "
                                     "%(command)s")
 
@@ -220,25 +224,30 @@ if not is_startup or args.run_local:
     unique_8_digit_id = random.randint(10**8, 10**9 - 1)  # don't use actual job id to avoid collisions in case this script has been restarted and the same job id is reused.
 
     task_started_time = datetime.datetime.now()
+
     while True:
         # get next interval
         current_interval = None
-        
+
+        if CTRL_C_SIGNAL:
+            logging.info("Interrupted. Exiting..")
+            break
+
         # claim an interval
         #with db.atomic() as txn:
         #db.execute_sql("LOCK TABLE %s WRITE" % db_table_name)
-        #unprocessed_intervals =  ParallelIntervals.raw("SELECT * FROM %s WHERE job_id is NULL and task_id is NULL and unique_id is NULL" % db_table_name) 
-        unprocessed_intervals = ParallelIntervals.select().where((
-            ParallelIntervals.job_id >> None) & (
-                ParallelIntervals.task_id >> None) & (
-                    ParallelIntervals.unique_id >> None)).limit(1)
+        #unprocessed_intervals =  ParallelIntervals.raw("SELECT * FROM %s WHERE job_id is NULL and task_id is NULL and unique_id is NULL" % db_table_name)
+        randomized_variant_num = random.randint(1, 1000)  # used to reduce chance of collisions
+
+        where_clause = (ParallelIntervals.started == 0) & (ParallelIntervals.finished == 0)
+        unprocessed_intervals = ParallelIntervals.select().where(where_clause).limit(randomized_variant_num)
  
         unprocessed_intervals = list(unprocessed_intervals)
         if len(unprocessed_intervals) == 0:
             logging.info("Finished all intervals. Exiting..")
             break
 
-        current_interval = unprocessed_intervals[0]
+        current_interval = unprocessed_intervals[-1]
         interval_started_time = datetime.datetime.now()
 
         hours_since_task_started = (interval_started_time - task_started_time).total_seconds()/3600
@@ -247,20 +256,9 @@ if not is_startup or args.run_local:
             break
 
         rows_updated = ParallelIntervals.update(
-            job_id = job_id, 
-            task_id = array_job_task_id, 
-            unique_id = unique_8_digit_id,
-            started = 1, 
-            started_date = interval_started_time, 
-            username = getpass.getuser(), 
-            machine_hostname = os.getenv('HOSTNAME', '')[0:100], 
-            machine_average_load = os.getloadavg()[-1],
-            #comments = str(current_interval.comments or "") + "__s_%s_id%s_%s" % (job_id, array_job_task_id, unique_8_digit_id)
+            started = 1,
         ).where(
-            (ParallelIntervals.id == current_interval.id) & (
-                ParallelIntervals.job_id >> None) & (
-                    ParallelIntervals.task_id >> None) & (
-                        ParallelIntervals.unique_id >> None)
+            (ParallelIntervals.id == current_interval.id) & where_clause
         ).execute()
 
         if rows_updated == 0:
@@ -268,6 +266,17 @@ if not is_startup or args.run_local:
             continue
 
         #db.execute_sql("UNLOCK TABLE")
+        current_interval.started = 1
+        current_interval.started_date = interval_started_time
+
+        current_interval.job_id = job_id
+        current_interval.task_id = array_job_task_id
+        current_interval.unique_id = unique_8_digit_id
+
+        current_interval.username = getpass.getuser()
+        current_interval.machine_hostname = os.getenv('HOSTNAME', '')[0:100]
+        current_interval.machine_average_load = os.getloadavg()[-1]
+        #current_interval.comments = str(current_interval.comments or "") + "__s_%s_id%s_%s" % (job_id, array_job_task_id, unique_8_digit_id)
 
         cmd = "%s --chrom %s --start-pos %s --end-pos %s" % (args.command,
             current_interval.chrom, current_interval.start_pos, current_interval.end_pos)
