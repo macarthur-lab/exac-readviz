@@ -117,7 +117,7 @@ def parse_genotypes(fields, alt_alleles, vcf_sample_ids, chrom = None, pos = Non
                 gt_ref = gt_alt = None
 
             try:
-                AD = map(int, genotype_values[AD_idx].split(","))
+                AD = list(map(int, genotype_values[AD_idx].split(",")))
                 DP = float(genotype_values[DP_idx])
                 GQ = float(genotype_values[GQ_idx])
             except ValueError:
@@ -190,7 +190,6 @@ def create_vcf_row_parser(header_line, valid_sample_ids=None):
             possible_genotypes = (het_or_hom_or_hemi, )
         else:
             possible_genotypes = ("het", "hom", "hemi") if chrom in ('X', 'Y') else ("het", "hom")
-
 
         # parse info field
         n_het_list, n_hom_list, n_hemi_list = parse_info_field(fields, alt_alleles, info_field, chrom=chrom, pos=pos)
