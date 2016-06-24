@@ -44,6 +44,7 @@ class ExacCallingInterval(_SharedMeta):
 
 # fields shared by Variant and Sample tables
 class _SharedVariantFields(_SharedMeta):
+
     chrom = peewee.CharField(max_length=5, null=False, index=True)
     pos = peewee.IntegerField(null=False)
     ref = peewee.CharField(max_length=MAX_ALLELE_SIZE, null=False)
@@ -52,12 +53,16 @@ class _SharedVariantFields(_SharedMeta):
 
     variant_id = peewee.CharField(max_length=5+1+10+1+MAX_ALLELE_SIZE+1+MAX_ALLELE_SIZE, null=True)  #eg. "X-12345-G-T"
 
-    started = peewee.BooleanField(default=0)
+    priority = peewee.IntegerField(default=0, index=True)  # processing priority
+
+    started = peewee.BooleanField(default=0, index=True)
     started_time = peewee.DateTimeField(default=None, null=True)
     # finished is 1 if all processing steps for this variant have finished (either successfully or with non-transient errors)
-    finished = peewee.BooleanField(default=0)
+    finished = peewee.BooleanField(default=0, index=True)
     finished_time = peewee.DateTimeField(default=None, null=True)
     comments = peewee.CharField(default='', null=True, max_length=100)  # used for debugging
+    username = peewee.CharField(max_length=10, default=None, null=True)
+
 
 
 # create table for non-sensitive variant-level info for all ExAC variants -
@@ -70,10 +75,10 @@ class Variant(_SharedVariantFields):
     n_available_samples = peewee.IntegerField(index=True, null=True)
     # list of bam paths to show (separated by '|') of size = n_available_samples
     readviz_bam_paths = peewee.TextField(default=None, null=True)
-    username = peewee.CharField(max_length=10, default=None, null=True)
 
     class Meta:
         indexes = (
+            (('started', 'finished'), False),
             (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'), True), # True means unique index
         )
 
@@ -93,13 +98,12 @@ class Sample(_SharedVariantFields):
     calling_interval_start = peewee.IntegerField(default=None, null=True)
     calling_interval_end = peewee.IntegerField(default=None, null=True)
 
-    hc_succeeded = peewee.BooleanField(default=0, index=True)
     hc_error_code = peewee.IntegerField(default=None, index=True, null=True)
     hc_error_text = peewee.TextField(default=None, null=True)
+    hc_command_line = peewee.TextField(default=None, null=True)
+    hc_succeeded = peewee.BooleanField(default=0, index=True)
     hc_n_artificial_haplotypes = peewee.IntegerField(default=None, index=True, null=True)
     hc_n_artificial_haplotypes_deleted = peewee.IntegerField(default=None, index=True, null=True)
-
-    hc_command_line = peewee.TextField(default=None, null=True)
 
     #screenshot_started = peewee.BooleanField(default=0)
     #screenshot_finished = peewee.BooleanField(default=0)
