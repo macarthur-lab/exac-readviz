@@ -50,6 +50,7 @@ p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac
 p.add_argument("-bsub", "--run-on-LSF", help="Submit to LSF", action="store_true")
 p.add_argument("-local", "--run-local", help="Run locally instead of submitting array jobs", action="store_true")
 p.add_argument("--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
+p.add_argument("--chrom", help="If specified, will only process intervals from this chromosome (eg. 'X').")
 p.add_argument("command", nargs="+", help="The command to parallelize. The command must work with --chrom, --start-pos, --end-pos")
 
 args, unknown_args = p.parse_known_args()
@@ -172,7 +173,7 @@ if is_startup:
         if args.run_on_LSF:
             launch_array_job_cmd = (
                 "bsub -N -J prog[1-%(num_jobs)s] -o %(log_dir)s -q hour "
-                    "python2.7 parallelize.py -isize %(interval_size)s %(command)s"
+                    "python2.7 parallelize.py %(chrom_arg)s -isize %(interval_size)s %(command)s"
             )
         else:
             launch_array_job_cmd = ("qsub -q short "
@@ -181,15 +182,22 @@ if is_startup:
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
-                "./run_python.sh python2.7 parallelize.py "
+                "./run_python.sh python2.7 parallelize.py %(chrom_arg)s "
                                     "-isize %(interval_size)s "
                                     "%(command)s")
+
+        chrom_arg = ""
+        if args.chrom:
+            chrom_arg = " --chrom %s " % args.chrom
 
         launch_array_job_cmd = launch_array_job_cmd  % {
             "interval_size" : args.interval_size,
             "num_jobs": args.num_jobs,
             "log_dir" : args.log_dir,
-            "command" : args.command}
+            "chrom_arg": chrom_arg,
+            "command" : args.command
+        }
+
         logging.info("Running: %s" % launch_array_job_cmd)
         subprocess.check_call(launch_array_job_cmd, shell=True)
 
@@ -198,9 +206,6 @@ if is_startup:
         # to reset unfinished task from jobs that have finished
         # also, compute worst time and exit task before 3 hours is up so job doesn't get killed
         # since job restarts are cheap
-
-
-
 
 
 if not is_startup or args.run_local:
@@ -240,6 +245,9 @@ if not is_startup or args.run_local:
         randomized_variant_num = random.randint(1, 1000)  # used to reduce chance of collisions
 
         where_clause = (ParallelIntervals.started == 0) & (ParallelIntervals.finished == 0)
+        if args.chrom:
+            where_clause &= (ParallelIntervals.chrom == args.chrom)
+
         unprocessed_intervals = ParallelIntervals.select().where(where_clause).limit(randomized_variant_num)
  
         unprocessed_intervals = list(unprocessed_intervals)
