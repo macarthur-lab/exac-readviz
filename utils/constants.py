@@ -42,7 +42,7 @@ GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__f
 #    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
     "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
 
-TCGA_NEW_BAM_PATHS = os.path.join(DATA_DIR_PREFIX, "TCGA_external_cghublink_batch1.tsv")
+TCGA_NEW_BAM_PATHS = os.path.join(DATA_DIR_PREFIX, "TCGA_external_cghublink_all.tsv")
 
 # used for igv screenshots
 GENCODE_BED_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.v19.sorted.bed")
