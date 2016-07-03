@@ -37,7 +37,7 @@ def run_haplotype_caller(
         sample_id,
         sample_i,
         all_bam_output_dir = None,
-        dry_run = False,
+        only_choose_samples = False,
     ):
     """Runs HC and does pre/post-processing on the given variant.
 
@@ -50,7 +50,7 @@ def run_haplotype_caller(
         sample_id: vcf sample id
         sample_i: if this sample passes all criteria, it would be sample number i to be shown for this variant
         all_bam_output_dir: top-level output dir for all reassembled bams
-        dry_run: if True, then don't actually run haplotype caller. just
+        only_choose_samples: if True, then don't actually run haplotype caller. just
     Return:
         2-tuple (x,y) where
             x = True if HC succeeded (or False otherwise)
@@ -72,23 +72,25 @@ def run_haplotype_caller(
         return (sr.hc_succeeded, sr.output_bam_path)
 
     sr.variant_id = "%s-%s-%s-%s" % (chrom, pos, ref, alt)
+    sr.sample_i = sample_i
     sr.original_bam_path = original_bam_path
-    if sample_id in TCGA_NEW_BAM_PATHS or "/humgen/gsa-firehose/ExAC_GATKV2.5/TCGA/downloads" in original_bam_path:
+    if sample_id in TCGA_NEW_BAM_PATHS or "tcga" in original_bam_path.lower():
         sr.priority = 1
 
-    if not dry_run:
+    if not only_choose_samples:
         sr.username = getpass.getuser()[0:10]
         sr.started = 1
         sr.comments = str(sr.comments or "")+"_s"  # started - used to check that started only once
         sr.started_time = datetime.datetime.now()
     sr.save()
 
-    logging.info("%s-%s-%s-%s %s - %s%s - start " % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
-    if not dry_run and not does_file_exist(sr.original_bam_path):
-        logging.info("%s-%s-%s-%s %s - %s%s - %s: %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, ".bam not found", original_bam_path))
+    logging.info("%s-%s-%s-%s %s - %s %s - start " % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
+    # TODO check if original bam path in set of missing bams (pre-compute missing files cache)
+    if not only_choose_samples and not does_file_exist(sr.original_bam_path):
+        logging.info("%s-%s-%s-%s %s - %s %s - %s: %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, ".bam not found", original_bam_path))
         error_text = "BAM not found"
-        if not dry_run:
-            sr.finished=1
+        if not only_choose_samples:
+            sr.finished = 1
             hc_failed(ERROR_ORIGINAL_BAM_NOT_FOUND, error_text, sr)
         else:
             sr.hc_error_code = ERROR_ORIGINAL_BAM_NOT_FOUND
@@ -96,7 +98,6 @@ def run_haplotype_caller(
             sr.save()
 
         return (False, None)
-
 
     # look up the exac calling interval that spans this variant, as well as its 2 adjacent intervals on either side
     left_i, i, right_i = get_adjacent_calling_intervals(
@@ -119,64 +120,64 @@ def run_haplotype_caller(
     temp_output_gvcf_path = os.path.join(all_bam_output_dir, relative_output_dir, "tmp." + os.path.basename(output_bam_path.replace(".bam", "") + ".gvcf"))
     files_to_delete_on_error += [temp_output_gvcf_path, temp_output_gvcf_path+".idx"]
 
-    if not sr.hc_command_line:
-        dash_L_intervals = list(itertools.chain.from_iterable(
-            [('-L', str(interval)) for interval in left_i + [i] + right_i]))
+    # make sure output directory exists
+    absolute_output_dir = os.path.dirname(temp_output_bam_path)
+    if not os.path.isdir(absolute_output_dir):
+        logging.debug("creating directory: %s" % absolute_output_dir)
+        run("mkdir -p %(absolute_output_dir)s; chmod 777 %(absolute_output_dir)s %(absolute_output_dir)s/.. " % locals())
 
-        # make sure output directory exists
-        absolute_output_dir = os.path.dirname(temp_output_bam_path)
-        if not os.path.isdir(absolute_output_dir):
-            logging.debug("creating directory: %s" % absolute_output_dir)
-            run("mkdir -p %(absolute_output_dir)s; chmod 777 %(absolute_output_dir)s %(absolute_output_dir)s/.. " % locals())
+    dash_L_intervals = list(itertools.chain.from_iterable(
+        [('-L', str(interval)) for interval in left_i + [i] + right_i]))
 
-        # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
-        gatk_cmd = [
-           "java",
-            "-XX:+UseSerialGC",
-            "-XX:+ReduceSignalUsage",
-            "-XX:+UseSerialGC",
-            "-XX:CICompilerCount=1",
-            "-XX:+DisableAttachMechanism",
-            "-XX:MaxHeapSize=512m",
-            #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
-            "-Xmx15g",
-            '-jar', GATK_JAR_PATH,
-            '-T', 'HaplotypeCaller',
-            '-R', "/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta",
-            '--disable_auto_index_creation_and_locking_when_reading_rods',
-            '-stand_call_conf', '30.0',
-            '-stand_emit_conf', '30.0',
-            '--minPruning', '3',
-            '--maxNumHaplotypesInPopulation', '200',
-            '-ERC', 'GVCF',
-            '--max_alternate_alleles', '3',
-            # '-A', 'DepthPerSampleHC',
-            # '-A', 'StrandBiasBySample',
-            #'--forceActive',
-            '--variant_index_type', 'LINEAR',
-            '--variant_index_parameter', '128000',
-            '--paddingAroundSNPs', ' 300',
-            '--paddingAroundIndels', '300',
-            '-I', original_bam_path,
-            '-bamout', temp_output_bam_path,
-            '--disable_bam_indexing',
-            '-o', temp_output_gvcf_path,
-            #'-et', 'NO_ET',
+    # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
+    gatk_cmd = [
+       "java",
+        "-XX:+UseSerialGC",
+        "-XX:+ReduceSignalUsage",
+        "-XX:+UseSerialGC",
+        "-XX:CICompilerCount=1",
+        "-XX:+DisableAttachMechanism",
+        "-XX:MaxHeapSize=512m",
+        #'-jar', './gatk-protected/target/executable/GenomeAnalysisTK.jar',
+        "-Xmx15g",
+        '-jar', GATK_JAR_PATH,
+        '-T', 'HaplotypeCaller',
+        '-R', "/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta",
+        '--disable_auto_index_creation_and_locking_when_reading_rods',
+        '-stand_call_conf', '30.0',
+        '-stand_emit_conf', '30.0',
+        '--minPruning', '3',
+        '--maxNumHaplotypesInPopulation', '200',
+        '-ERC', 'GVCF',
+        '--max_alternate_alleles', '3',
+        # '-A', 'DepthPerSampleHC',
+        # '-A', 'StrandBiasBySample',
+        #'--forceActive',
+        '--variant_index_type', 'LINEAR',
+        '--variant_index_parameter', '128000',
+        '--paddingAroundSNPs', ' 300',
+        '--paddingAroundIndels', '300',
+        '-I', original_bam_path,
+        '-bamout', temp_output_bam_path,
+        '--disable_bam_indexing',
+        '-o', temp_output_gvcf_path,
+        #'-et', 'NO_ET',
 
-        ] + list(dash_L_intervals)
+    ] + list(dash_L_intervals)
 
-        sr.hc_command_line = " ".join(gatk_cmd)
-        sr.save()
+    sr.hc_command_line = " ".join(gatk_cmd)
+    sr.save()
 
-    if dry_run:
-        logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, " finished dry run"))
+    if only_choose_samples:
+        logging.info("%s-%s-%s-%s %s - %s %s - %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, " finished choosing sample"))
         return (True, output_bam_path)
 
     try:
-        logging.info("%s-%s-%s-%s %s - %s%s - launching HC %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, " ".join(dash_L_intervals)))
+        logging.info("%s-%s-%s-%s %s - %s %s - launching HC" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
         logging.info(sr.hc_command_line)
         #os.system(" ".join(gatk_cmd))
-        cmd_output = subprocess.check_output(gatk_cmd, stderr=subprocess.STDOUT).decode()
+        cmd_output = subprocess.check_output(sr.hc_command_line, stderr=subprocess.STDOUT, shell=True).decode()
+        logging.info("Output:\n"+cmd_output)
         if "Total runtime" not in cmd_output:
             raise subprocess.CalledProcessError(100, sr.hc_command_line, cmd_output)
     except subprocess.CalledProcessError as e:
@@ -194,16 +195,16 @@ def run_haplotype_caller(
     sr.is_missing_original_gvcf = not does_file_exist(sr.original_gvcf_path) or not does_file_exist(original_gvcf_path + ".tbi")
 
     if not sr.is_missing_original_gvcf:
-        logging.info("%s-%s-%s-%s %s - %s%s - checking gvcfs" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
+        logging.info("%s-%s-%s-%s %s - %s %s - checking gvcfs" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
         gvcf_calls_matched, mismatch_error_code, mismatch_error_text = retry_if_IOError(
             check_gvcf, sr.original_gvcf_path, temp_output_gvcf_path, chrom, pos)
 
         if not gvcf_calls_matched:
-            sr.finished=1
+            sr.finished = 1
             error_code = ERROR_GVCF_MISMATCH + mismatch_error_code  # combine the 2 error codes
             hc_failed(error_code, mismatch_error_text, sr)
 
-            logging.info("%s-%s-%s-%s %s - %s%s - gvcfs mimatch: %s - %s" % (
+            logging.info("%s-%s-%s-%s %s - %s %s - gvcfs mimatch: %s - %s" % (
                 chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, error_code, mismatch_error_text))
 
             # save the output gvcf for debugging
@@ -235,10 +236,10 @@ def run_haplotype_caller(
     run("rm -f %s" % temp_output_gvcf_path)
     run("rm -f %s" % (temp_output_gvcf_path+".idx"))
 
-    logging.info("%s-%s-%s-%s %s - %s%s - post-processing bams" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
+    logging.info("%s-%s-%s-%s %s - %s %s - post-processing bams" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
     # postprocess and move output bam from temp_output_bam_path to output_bam_path
     # strip out read groups, read ids, tags, etc. to remove any sensitive info and reduce bam size
-    final_output_bam_path = os.path.join(all_bam_output_dir, sr.output_bam_path)
+    final_output_bam_path = os.path.join(all_bam_output_dir, output_bam_path)
 
     run("rm -f %s" % final_output_bam_path)
     (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes, sr.hc_n_artificial_haplotypes_deleted) = retry_if_IOError(
@@ -253,7 +254,7 @@ def run_haplotype_caller(
         files_to_delete_on_error.append( final_output_bam_path )
         files_to_delete_on_error.append( final_output_bam_path+".bai" )
         sr.finished = 1
-        hc_failed(ERROR_REASSEMBLED_BAM_IS_EMPTY, sr.hc_command_line, sr, files_to_delete_on_error)
+        hc_failed(ERROR_REASSEMBLED_BAM_IS_EMPTY, "reassembled bam is empty", sr, files_to_delete_on_error)
         return (False, None)
     else:
         pass
@@ -268,7 +269,7 @@ def run_haplotype_caller(
     sr.hc_succeeded = 1
     sr.save()
 
-    logging.info("%s-%s-%s-%s %s - %s%s - %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, "done!"))
+    logging.info("%s-%s-%s-%s %s - %s %s - %s" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id, "done!"))
     return (True, sr.output_bam_path)
 
 
