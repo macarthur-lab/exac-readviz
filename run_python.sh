@@ -8,6 +8,7 @@ source /broad/software/scripts/useuse
 reuse UGER
 reuse Python-3.4
 reuse Python-2.7
+reuse Java-1.7
 
 echo "run_python.sh: user=$USER"
 echo "run_python.sh: host=$HOST"
