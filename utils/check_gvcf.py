@@ -35,6 +35,7 @@ def check_gvcf(original_gvcf_path, new_gvcf_path, chrom, pos):
 
     #assert os.path.isfile(new_gvcf_path), "new GVCF file not found: %s" % new_gvcf_path
 
+    chrom = str(chrom)
     pos = int(pos)
 
 
