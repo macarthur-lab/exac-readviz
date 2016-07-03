@@ -110,6 +110,7 @@ class Sample(_SharedVariantFields):
 
     class Meta:
         indexes = (
+            (('started', 'finished'), False),
             (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'sample_id'), True), # True means unique index
         )
 
