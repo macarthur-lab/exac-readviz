@@ -73,7 +73,7 @@ def run_haplotype_caller(
 
     sr.variant_id = "%s-%s-%s-%s" % (chrom, pos, ref, alt)
     sr.sample_i = sample_i
-    sr.original_bam_path = original_bam_path
+    sr.original_bam_path = str(original_bam_path)
     if sample_id in TCGA_NEW_BAM_PATHS or "tcga" in original_bam_path.lower():
         sr.priority = 1
 
@@ -110,7 +110,7 @@ def run_haplotype_caller(
 
     sr.calling_interval_start = i.start
     sr.calling_interval_end = i.end
-    sr.original_gvcf_path = original_gvcf_path
+    sr.original_gvcf_path = str(original_gvcf_path)
 
     # first, output to temp files to avoid partially-finished files if HC crashes or is killed
     relative_output_dir = os.path.dirname(output_bam_path)
@@ -192,7 +192,7 @@ def run_haplotype_caller(
         return (False, None)
 
     # check GVCF against original GVCF call
-    sr.is_missing_original_gvcf = not does_file_exist(sr.original_gvcf_path) or not does_file_exist(original_gvcf_path + ".tbi")
+    sr.is_missing_original_gvcf = not does_file_exist(sr.original_gvcf_path) or not does_file_exist(sr.original_gvcf_path + ".tbi")
 
     if not sr.is_missing_original_gvcf:
         logging.info("%s-%s-%s-%s %s - %s %s - checking gvcfs" % (chrom, pos, ref, alt, het_or_hom_or_hemi, sample_i, sample_id))
