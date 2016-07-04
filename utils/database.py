@@ -42,9 +42,7 @@ class ExacCallingInterval(_SharedMeta):
         )
 
 
-# fields shared by Variant and Sample tables
-class _SharedVariantFields(_SharedMeta):
-
+class _SharedVariantPositionFields(_SharedMeta):
     chrom = peewee.CharField(max_length=5, null=False, index=True)
     pos = peewee.IntegerField(null=False)
     ref = peewee.CharField(max_length=MAX_ALLELE_SIZE, null=False)
@@ -53,7 +51,11 @@ class _SharedVariantFields(_SharedMeta):
 
     variant_id = peewee.CharField(max_length=5+1+10+1+MAX_ALLELE_SIZE+1+MAX_ALLELE_SIZE, null=True)  #eg. "X-12345-G-T"
 
-    priority = peewee.IntegerField(default=0, index=True)  # processing priority
+
+# fields shared by Variant and Sample tables
+class _SharedVariantFields(_SharedVariantPositionFields):
+
+    priority = peewee.IntegerField(default=0, null=True, index=True)  # processing priority
 
     started = peewee.BooleanField(default=0, index=True)
     started_time = peewee.DateTimeField(default=None, null=True)
@@ -79,6 +81,7 @@ class Variant(_SharedVariantFields):
     class Meta:
         indexes = (
             (('started', 'finished'), False),
+            (('chrom', 'started', 'finished'), False),
             (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi'), True), # True means unique index
         )
 
@@ -111,6 +114,7 @@ class Sample(_SharedVariantFields):
     class Meta:
         indexes = (
             (('started', 'finished'), False),
+            (('chrom', 'started', 'finished'), False),
             (('chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'sample_id'), True), # True means unique index
         )
 
