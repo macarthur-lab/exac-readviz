@@ -8,6 +8,8 @@ import os
 from mysql.connector import MySQLConnection
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
+INTERVALS_TABLE = 'python2_pipeline_i333'
+
 # initialize flags that control which sections are actually executed
 reset_variants_with_transient_errors = 0
 reset_variants_with_fewer_than_expected_available_samples = 0
@@ -22,14 +24,14 @@ set_intervals_where_all_contained_varaints_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
 
 # set flags to execute particular sections of code
-reset_variants_with_transient_errors = 1
+#reset_variants_with_transient_errors = 1
 #reset_variants_with_fewer_than_expected_available_samples = 1
 #reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
 #reset_variants_with_bams_in_db_but_not_on_disk = 1
 #reset_variants_that_contain_unfinished_samples = 1
-#reset_intervals_that_contain_unfinished_variants = 1
-#reset_intervals_that_had_error_code = 1
-#reset_unifinished_intervals_to_clear_job_id = 1
+reset_intervals_that_contain_unfinished_variants = 1
+reset_intervals_that_had_error_code = 1
+reset_unifinished_intervals_to_clear_job_id = 1
 run_stat_queries = 1
 
 
@@ -139,13 +141,13 @@ if reset_unfinished_intervals_in_important_genes:
 
 
 
-    run_query(("select * from python3_4_generate_HC_bams_py_i200 "
+    run_query(("select * from " + INTERVALS_TABLE +
                "where finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
 
 
     # enable intervals that are overlapping the intervals of interest
     print("Reset intervals overlapping intervals of interest")
-    run_query(("update python3_4_generate_HC_bams_py_i200 set job_id=NULL, comments=NULL, task_id=NULL, unique_id=NULL "
+    run_query(("update " + INTERVALS_TABLE + " set job_id=NULL, comments=NULL, task_id=NULL, unique_id=NULL "
                "where (job_id is NULL or job_id = -1 ) and finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
 
 
@@ -172,7 +174,7 @@ if run_stat_queries or set_intervals_where_all_contained_varaints_have_finished 
     # get all intervals
     from collections import defaultdict
     all_intervals = defaultdict(set)
-    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from python3_4_generate_HC_bams_py_i200") #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from " + INTERVALS_TABLE) #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
     for chrom, start_pos, end_pos, started, finished, error_code in c:
         all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
 
@@ -198,7 +200,7 @@ if set_intervals_where_all_contained_varaints_have_finished:
             if c.rowcount > 0:
                 print("Found %s unfinished variants in %s:%s-%s. Skipping" % (c.rowcount, current_chrom, start_pos, end_pos))
             else:
-                run_query(("update python3_4_generate_HC_bams_py_i200 set job_id=1, started=1, finished=1 "
+                run_query(("update " + INTERVALS_TABLE + " set job_id=1, started=1, finished=1 "
                            "where chrom='%(current_chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
 if reset_variants_with_fewer_than_expected_available_samples:
@@ -298,7 +300,7 @@ if reset_intervals_that_contain_unfinished_variants:
             chrom = i[0]
             start_pos = i[1]
             end_pos = i[2]
-            run_query(("update python3_4_generate_HC_bams_py_i200 "
+            run_query(("update " + INTERVALS_TABLE +
                        "set job_id=NULL, comments=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
                        "where chrom='%(chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
 
@@ -310,13 +312,13 @@ if reset_intervals_that_contain_unfinished_variants:
 
 if reset_intervals_that_had_error_code:
     print("=== reset_intervals_that_had_error_code ===")
-    run_query("update python3_4_generate_HC_bams_py_i200 "
+    run_query("update " + INTERVALS_TABLE +
               "set job_id=NULL, comments=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where error_code > 0")
 
 if reset_unifinished_intervals_to_clear_job_id:
     print("=== reset_unifinished_intervals_to_clear_job_id ===")
-    run_query("update python3_4_generate_HC_bams_py_i200 "
+    run_query("update " + INTERVALS_TABLE +
               "set job_id=NULL, comments=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
               "where finished=0")
 
