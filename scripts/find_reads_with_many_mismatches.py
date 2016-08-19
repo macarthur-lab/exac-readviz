@@ -15,6 +15,7 @@ print("%s files" % len(args.combined_bam))
 fasta = pysam.Fastafile("/seq/references/Homo_sapiens_assembly19/v1/Homo_sapiens_assembly19.fasta")
 total_variants = set()
 variants = defaultdict(int)
+mismatch_counts = []
 for bam_path in args.combined_bam:
     f = pysam.AlignmentFile(bam_path)
     for r in f:
@@ -30,6 +31,7 @@ for bam_path in args.combined_bam:
         if not ((r.reference_start - 50 < variant_pos) and (r.reference_end + 50 > variant_pos)):
             continue
 
+
         read_sequence = r.query_alignment_sequence
         reference_sequence = fasta.fetch(r.reference_name, r.reference_start, r.reference_end)
         if len(read_sequence) != len(reference_sequence):
@@ -37,19 +39,23 @@ for bam_path in args.combined_bam:
             continue
         if read_sequence != reference_sequence:
             mismatches = [i for i, (a,b) in enumerate(zip(read_sequence, reference_sequence)) if a != b and a != 'N' and b != 'N']
-            if len(mismatches) > 20 and r.reference_start:
+            if len(mismatches) > 10:
                 variants[rg] += 1
+                mismatch_counts.append(1 - len(mismatches)/float(len(read_sequence)))
                 print("#%s: %s %s - %s mismtaches - read: %s:%s %s" % (len(variants), rg.replace("_", " "), r.cigarstring, len(mismatches), r.reference_name, r.reference_start, r.query_name))
-
 
     class FakeOptions:
         def __getattr__(self, key):
             return None
     if len(set(variants.values())) > 1:
-        os.system("echo '%s' | histogram.py" % '\n'.join(["%s" % v for v in variants.values()]))
+        print("Bad reads per variant:")
+        os.system("echo '%s' | histogram.py" % '\n'.join(map(str, variants.values())))
+    if len(set(mismatch_counts)) > 1:
+        print("Fraction of read that matches the reference:")
+        os.system("echo '%s' | histogram.py" % '\n'.join(map(str, mismatch_counts)))
 
     print("%s out of %s variants (%s)" % (len(variants), len(total_variants), len(variants)/float(len(total_variants))))
 
-print("%s variants with mismatching reads: " % len(variants))
-print("\n  ".join(["%s:  %s" % (v, k) for k,v in variants.items()]))
+print("variants with mismatching reads :")
+print("\n".join(variants))
 
