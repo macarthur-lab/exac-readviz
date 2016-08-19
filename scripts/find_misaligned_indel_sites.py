@@ -40,7 +40,7 @@ class Sample(_SharedVariantFields):
 print("\t".join(["pos_id", "sample_id", "bam_path"]))
 
 total = affected = 0
-for path in glob(os.path.join(os.path.dirname(__file__), "../test/data/19/combined_*.bam")):
+for path in glob(os.path.join(os.path.dirname(__file__), "../test/data/X/combined_*.bam")):
     f = pysam.AlignmentFile(path)
 
     pos_id_to_all_reads_counter = defaultdict(int)
