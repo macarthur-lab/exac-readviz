@@ -1,6 +1,5 @@
 awesome-slugify
 configargparse
-igv_plotter
 mysql-connector-python-rf
 peewee
 pyinstrument
