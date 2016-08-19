@@ -9,8 +9,10 @@ DB_USER = 'root'
 
 DATA_DIR_PREFIX = '/humgen/atgu1/fs03/weisburd/exac_readviz_scripts_data' 
 BIN_DIR_PREFIX = os.path.join(DATA_DIR_PREFIX, 'bin') 
-BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
+#BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
+BAM_OUTPUT_DIR = "/humgen/atgu1/fs03/weisburd/exac_readviz_output/"
 
+EXIT_UGER_JOB_AFTER_N_HOURS = 0.5    # if running a processing loop in a UGER job, exit after this many hours to avoid getting killed by the short queue time limit.
 
 # how many samples to show per het, hom-alt or hemizygous variant in the exac browser.
 MAX_SAMPLES_TO_SHOW_PER_VARIANT = 5
@@ -40,7 +42,8 @@ PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting 
 
 GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)),
 #    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
-    "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
+#    "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
+     "bin/GATK_readVizFix_071116.jar"))
 
 TCGA_NEW_BAM_PATHS = os.path.join(DATA_DIR_PREFIX, "TCGA_external_cghublink_all.tsv")
 
