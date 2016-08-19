@@ -189,7 +189,7 @@ if __name__ == "__main__":
     p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int, default=10**10)
 
     p.add("--exit-after", metavar="MINUTES", help="This many minutes after starting, finish processing "
-                                                  "the current sample and then exit", default=60*3.75, type=float)
+                                                  "the current sample and then exit", default=60*1, type=float)
 
     args = p.parse_args()
 
