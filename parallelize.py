@@ -28,7 +28,7 @@ import random
 import signal
 import slugify
 import subprocess
-from utils.constants import DB_HOST, DB_PORT, DB_USER
+from utils.constants import DB_HOST, DB_PORT, DB_USER, BAM_OUTPUT_DIR, EXIT_UGER_JOB_AFTER_N_HOURS
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -46,7 +46,7 @@ p = argparse.ArgumentParser()
 p.add_argument("-L", "--interval-list", help="An interval file")
 p.add_argument("-n", "--num-jobs", help="Number of array job tasks to launch")
 p.add_argument("-isize", "--interval-size", help="Max interval size", type=int, default=200)
-p.add_argument("--log-dir", help="Logging directory", default="/broad/hptmp/exac_readviz_backend/logs")
+p.add_argument("--log-dir", help="Logging directory", default=os.path.join(BAM_OUTPUT_DIR, "logs"))
 p.add_argument("-bsub", "--run-on-LSF", help="Submit to LSF", action="store_true")
 p.add_argument("-local", "--run-local", help="Run locally instead of submitting array jobs", action="store_true")
 p.add_argument("--regenerate-intervals-table", help="Regenerate intervals table from scratch", action="store_true")
@@ -179,6 +179,7 @@ if is_startup:
             launch_array_job_cmd = ("qsub -q short "
                 "-t 1-%(num_jobs)s "
                 "-cwd "
+                "-l m_mem_free=4g "
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
@@ -258,9 +259,9 @@ if not is_startup or args.run_local:
         current_interval = unprocessed_intervals[-1]
         interval_started_time = datetime.datetime.now()
 
-        hours_since_task_started = (interval_started_time - task_started_time).total_seconds()/3600
-        if hours_since_task_started > 3.5:
-            logging.info("SGE short queue time limit is getting close. Won't start another interval.")
+        hours_since_task_started = (interval_started_time - task_started_time).total_seconds()/3600.0
+        if hours_since_task_started > EXIT_UGER_JOB_AFTER_N_HOURS:   # TODO check if args.run_on_LSF
+            logging.info("Job has been running for %s hours. UGER short queue time limit is coming up. Exiting to avoid getting killed." % hours_since_task_started)
             break
 
         rows_updated = ParallelIntervals.update(
