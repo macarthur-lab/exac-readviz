@@ -1,3 +1,5 @@
+#!/bin/bash
+
 export TERM=xterm
 source /broad/software/scripts/useuse
 
