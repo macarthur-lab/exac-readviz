@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ ! -d /humgen/atgu1/fs03 ]; then
     echo "/humgen/atgu1/fs03 not found. Exiting.."
     exit -1
