@@ -179,7 +179,7 @@ if is_startup:
             launch_array_job_cmd = ("qsub -q short "
                 "-t 1-%(num_jobs)s "
                 "-cwd "
-                "-l m_mem_free=4g "
+                "-l h_vmem=4g -l m_mem_free=4g "
                 "-o %(log_dir)s "
                 "-e %(log_dir)s "
                 "-j y -V "
