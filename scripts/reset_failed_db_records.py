@@ -3,14 +3,14 @@ This script updates database records  in the interval, variant, sample tables to
 recover from various kinds of transient errors fixable errors
 such as cluster filesystem problems, some previously-generated files being deleted, etc.
 """
-
 import os
 from mysql.connector import MySQLConnection
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
-INTERVALS_TABLE = 'python2_pipeline_i333'
+INTERVALS_TABLE = 'python2_pipeline_i1000000'
 
 # initialize flags that control which sections are actually executed
+reset_samples_with_transient_error = 0
 reset_variants_with_transient_errors = 0
 reset_variants_with_fewer_than_expected_available_samples = 0
 reset_variants_with_original_bams_marked_missing_due_to_transient_error = 0
@@ -18,10 +18,14 @@ reset_variants_with_bams_in_db_but_not_on_disk = 0
 reset_intervals_that_had_error_code = 0
 reset_variants_that_contain_unfinished_samples = 0
 reset_intervals_that_contain_unfinished_variants = 0
-reset_unifinished_intervals_to_clear_job_id = 0
+reset_intervals_that_contain_unfinished_samples = 0
+reset_unfinished_intervals_to_clear_job_id = 0
+reset_unfinished_samples_in_finished_chroms = 0
 run_stat_queries = 0
-set_intervals_where_all_contained_varaints_have_finished = 0
+reset_unfinished_samples_in_finished_chroms = 0
+set_intervals_where_all_contained_variants_have_finished = 0
 reset_unfinished_intervals_in_important_genes = 0
+reset_samples_with_original_bams_marked_missing_due_to_transient_error = 0
 
 # set flags to execute particular sections of code
 #reset_variants_with_transient_errors = 1
@@ -29,10 +33,16 @@ reset_unfinished_intervals_in_important_genes = 0
 #reset_variants_with_original_bams_marked_missing_due_to_transient_error = 1
 #reset_variants_with_bams_in_db_but_not_on_disk = 1
 #reset_variants_that_contain_unfinished_samples = 1
-reset_intervals_that_contain_unfinished_variants = 1
-reset_intervals_that_had_error_code = 1
-reset_unifinished_intervals_to_clear_job_id = 1
-run_stat_queries = 1
+#reset_intervals_that_contain_unfinished_variants = 1
+#reset_intervals_that_had_error_code = 1
+
+reset_samples_with_transient_error = 1
+reset_samples_with_original_bams_marked_missing_due_to_transient_error = 1
+reset_unfinished_samples_in_finished_chroms = 1
+reset_intervals_that_contain_unfinished_samples = 1
+
+#reset_unfinished_intervals_to_clear_job_id = 1
+#run_stat_queries = 1
 
 
 print("connecting to db")
@@ -46,6 +56,9 @@ def print_query(q):
 def run_query(q):
     print('---------')
     print(q)
+    #if not q.lower().strip().startswith("select"):
+    #    return
+
     c.execute(q)
     if not q.lower().strip().startswith("select"):
         conn.commit()
@@ -93,19 +106,30 @@ if reset_variants_with_original_bams_marked_missing_due_to_transient_error:
     found_bam_paths = tuple([p[0] for p in all_original_bam_paths if os.path.isfile(p[0])])
     print("Of these, %d actually exist on disk. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
     if found_bam_paths:
-        run_query(("update variant as v join sample as s on "
-              "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
-              "set v.finished=0, v.comments=NULL, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
-              "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
-               "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
+        pass
+        #run_query(("update variant as v join sample as s on "
+        #      "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
+        #      "set v.finished=0, v.comments=NULL, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
+        #      "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
+        #       "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
-        run_query(("update sample as s join variant as v on "
-               "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
-               "set s.finished=0, s.comments=NULL, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
-               "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
-               "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
+        #run_query(("update sample as s join variant as v on "
+        #       "v.chrom=s.chrom and v.pos=s.pos and v.ref=s.ref and v.alt=s.alt and v.het_or_hom_or_hemi=s.het_or_hom_or_hemi "
+        #       "set s.finished=0, s.comments=NULL, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
+        #       "where v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples and "
+        #       "s.hc_error_code IN (1000, 1010) and s.original_bam_path IN %s") % str(found_bam_paths).replace(',)', ')'))
 
-
+if reset_samples_with_original_bams_marked_missing_due_to_transient_error:
+    print("=== reset_samples_with_original_bams_marked_missing_due_to_transient_error ===")
+    print("step 1: Find bams that caused a file-doesn't-exist error, but actually do exist")
+    c.execute("select distinct original_bam_path from sample where hc_error_code=1000")
+    all_original_bam_paths = list(c.fetchall())
+    print("Found %d distinct bams that caused 1000 error" % len(all_original_bam_paths))
+    found_bam_paths = tuple([p[0] for p in all_original_bam_paths if os.path.isfile(p[0])])
+    print("Of these, %d actually exist on disk. Reset records with missing-bam errors to finished=0 for bams in this list" % len(found_bam_paths))
+    if found_bam_paths:
+        run_query("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
+                  "where hc_error_code=1000 and original_bam_path IN %s" % str(found_bam_paths).replace(',)', ')').replace("u'", "'"))
 
 if reset_variants_with_transient_errors:
     print("=== reset_variants_with_transient_errors ===")
@@ -123,8 +147,9 @@ if reset_variants_with_transient_errors:
                "where (s.hc_error_code IN (2001, 2011, 2009, 2019, 2021, 4000) or (s.hc_error_code is NULL and s.hc_succeeded=0)) "    # 3001,
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
-ALL_CHROMS = list(map(str, [10,11,12,13,14,15,16,17,18,19,20,21,22, 1,2,3,4,5,6,7,8,9, 'X','Y']))
-#FINISHED_CHROMOSOMES = str(tuple(map(str, ALL_CHROMS))).replace(",)", ")") #
+ALL_CHROMS = list(map(str, [1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,3,4,5,6,7,8,9, 'X','Y']))
+FINISHED_CHROMS = list(map(str, [1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,3,4,5,6])) #21,22,3,4,5,6,7,8,9, 'X','Y']))
+FINISHED_CHROMS_STRING = str(tuple(map(str, FINISHED_CHROMS))).replace(",)", ")") #
 
 
 # reset unfinished intervals not in top genes and not in genomic regions
@@ -139,11 +164,8 @@ if reset_unfinished_intervals_in_important_genes:
             if len(sql_is_overlapping) > 300:
                 break
 
-
-
     run_query(("select * from " + INTERVALS_TABLE +
                "where finished=0 and ( %s )") % " or ".join(sql_is_overlapping))
-
 
     # enable intervals that are overlapping the intervals of interest
     print("Reset intervals overlapping intervals of interest")
@@ -152,7 +174,7 @@ if reset_unfinished_intervals_in_important_genes:
 
 
 
-if run_stat_queries or set_intervals_where_all_contained_varaints_have_finished or reset_intervals_that_contain_unfinished_variants:
+if run_stat_queries or set_intervals_where_all_contained_variants_have_finished or reset_intervals_that_contain_unfinished_variants or reset_intervals_that_contain_unfinished_samples:
     """
     +---------------------+--------------+------+-----+---------+----------------+
     | Field               | Type         | Null | Key | Default | Extra          |
@@ -174,25 +196,30 @@ if run_stat_queries or set_intervals_where_all_contained_varaints_have_finished 
     # get all intervals
     from collections import defaultdict
     all_intervals = defaultdict(set)
-    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from " + INTERVALS_TABLE) #" where chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from %(INTERVALS_TABLE)s" % locals())
     for chrom, start_pos, end_pos, started, finished, error_code in c:
         all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
 
+    all_finished_intervals = defaultdict(set)
+    c = run_query("select chrom, start_pos, end_pos, started, finished, error_code from %(INTERVALS_TABLE)s where started=1 and finished=1" % locals())
+    for chrom, start_pos, end_pos, started, finished, error_code in c:
+        all_finished_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
 
-    total = 0
+    total = finished_count = 0
     for chrom in all_intervals:
+        finished_count += len(all_finished_intervals[chrom])
         total += len(all_intervals[chrom])
-        print("%s: %s intervals" % (chrom, len(all_intervals[chrom])))
-    print("total: %s intervals" % total)
+        print("%s: %s finished out of %s intervals" % (chrom, len(all_finished_intervals[chrom]), len(all_intervals[chrom])))
+    print("total: %s finished out of %s total intervals" % (finished_count, total))
 
 
 
 # set intervals as finished if all variants in them are finished
-if set_intervals_where_all_contained_varaints_have_finished:
+if set_intervals_where_all_contained_variants_have_finished:
     # unlike the other recovery code
     # this is useful for rebuilding the intervals table from scratch by setting
     # each interval record to finished if all variants it contains are finished
-    print("=== set_intervals_where_all_contained_varaints_have_finished ===")
+    print("=== set_intervals_where_all_contained_variants_have_finished ===")
     for current_chrom in ALL_CHROMS:
         #all_intervals[chrom].add((chrom, int(start_pos), int(end_pos), int(started), int(finished), int(error_code)))
         for _, start_pos, end_pos, _, _, _ in all_intervals[current_chrom]:
@@ -249,8 +276,7 @@ if reset_variants_with_bams_in_db_but_not_on_disk:
                 run_query("update variant as v "
                           "set v.finished=0, v.comments=NULL, n_available_samples=NULL, n_expected_samples=NULL, readviz_bam_paths=NULL "
                           "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom_or_hemi='%s' " % t[1:])
-                run_query("update sample as s "
-                          "set s.finished=0, s.comments=NULL, hc_succeeded=0, hc_error_code=NULL, hc_error_text=NULL, sample_i=NULL, original_bam_path=NULL, original_gvcf_path=NULL, output_bam_path=NULL, hc_command_line=NULL "
+                run_query("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
                           "where chrom='%s' and pos=%s and ref='%s' and alt='%s' and het_or_hom_or_hemi='%s' " % t[1:])
 
 if reset_variants_that_contain_unfinished_samples:
@@ -269,12 +295,12 @@ if reset_variants_that_contain_unfinished_samples:
 if reset_intervals_that_contain_unfinished_variants:
     print("=== reset_intervals_that_contain_unfinished_variants ===")
     for current_chrom in ALL_CHROMS:
-        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and v.finished=0 order by pos asc" % locals()) #" and chrom in %(FINISHED_CHROMOSOMES)s" % locals())
+        c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and v.finished=0 order by pos asc" % locals()) 
         all_unfinished_variants = c.fetchall()
 
-        unfinished_intervals_marked_as_finished = set()
+        unfinished_intervals = set()
         current_interval = None
-        print("Checking for unfinished_intervals_marked_as_finished using %s unfinished variants in chr%s" % (len(all_unfinished_variants), current_chrom))
+        print("Checking for unfinished_intervals using %s unfinished variants in chr%s" % (len(all_unfinished_variants), current_chrom))
 
         for chrom, pos in all_unfinished_variants:
             pos = int(pos)
@@ -283,8 +309,8 @@ if reset_intervals_that_contain_unfinished_variants:
                     if i[1] <= pos and pos <= i[2]:
                         current_interval = i
                         if i[4] > 0:
-                            unfinished_intervals_marked_as_finished.add(i)
-                            #print("%s: %s" % (len(unfinished_intervals_marked_as_finished), i))
+                            unfinished_intervals.add(i)
+                            #print("%s: %s" % (len(unfinished_intervals), i))
                         #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
                         break
                 else:
@@ -293,10 +319,10 @@ if reset_intervals_that_contain_unfinished_variants:
             #else:
                 #print("%(chrom)s %(pos)s is in same interval %(current_interval)s" % locals())
 
-        print("Found %s unfinished intervals marked as finished=1 in %s" % (len(unfinished_intervals_marked_as_finished), current_chrom))
+        print("Found %s unfinished intervals in %s" % (len(unfinished_intervals), current_chrom))
 
         print("Updating intervals")
-        for i in unfinished_intervals_marked_as_finished:
+        for i in unfinished_intervals:
             chrom = i[0]
             start_pos = i[1]
             end_pos = i[2]
@@ -309,17 +335,72 @@ if reset_intervals_that_contain_unfinished_variants:
         #            "started_date=NULL, finished=0, finished_date=NULL, "
         #            "error_code=500, error_message=NULL where finished=0 and started_date <")
 
+if reset_samples_with_transient_error:
+        run_query(("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
+                   "where hc_error_code >= 2000 and hc_error_code < 3000") % locals())
+
+if reset_unfinished_samples_in_finished_chroms:
+    run_query("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
+              "where chrom in %(FINISHED_CHROMS_STRING)s and started in (0, 1) and finished=0" % locals())
+
+
+if reset_intervals_that_contain_unfinished_samples:
+    print("=== reset_intervals_that_contain_unfinished_samples ===")
+    for current_chrom in ALL_CHROMS:
+        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 order by pos asc" % locals())
+        all_unfinished_samples = c.fetchall()
+
+        unfinished_intervals = set()
+        current_interval = None
+        print("Checking for unfinished_intervals using %s unfinished samples in chr%s" % (len(all_unfinished_samples), current_chrom))
+
+        for chrom, pos in all_unfinished_samples:
+            pos = int(pos)
+            if current_interval is None or current_interval[0] != chrom or pos < current_interval[1] or pos > current_interval[2]:
+                for i in all_intervals[chrom]:
+                    if i[1] <= pos and pos <= i[2]:
+                        current_interval = i
+                        if i[4] > 0:
+                            unfinished_intervals.add(i)
+                            #print("%s: %s" % (len(unfinished_intervals), i))
+                        #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
+                        break
+                else:
+                    raise ValueError("%(chrom)s-%(pos)s is not in any intervals" % locals())
+
+            #else:
+                #print("%(chrom)s %(pos)s is in same interval %(current_interval)s" % locals())
+
+        print("Found %s unfinished intervals in %s" % (len(unfinished_intervals), current_chrom))
+
+        print("Updating intervals")
+        for i in unfinished_intervals:
+            chrom = i[0]
+            start_pos = i[1]
+            end_pos = i[2]
+            run_query(("update %(INTERVALS_TABLE)s "
+                       "set job_id=null, task_id=null, unique_id=null, started=0, started_date=null, finished=0, finished_date=null, "
+                       "error_code=0, error_message=null, priority=null, username=null, machine_hostname=null, machine_average_load=null, comments=null " 
+                       "where chrom='%(chrom)s' and start_pos=%(start_pos)s and end_pos=%(end_pos)s") % locals())
+
+        #print_query("update python3_4_generate_HC_bams_py_i200 set "
+        #            "job_id=NULL, task_id=NULL, unique_id=NULL, started=0, "
+        #            "started_date=NULL, finished=0, finished_date=NULL, "
+        #            "error_code=500, error_message=NULL where finished=0 and started_date <")
+
 
 if reset_intervals_that_had_error_code:
     print("=== reset_intervals_that_had_error_code ===")
     run_query("update " + INTERVALS_TABLE +
-              "set job_id=NULL, comments=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
+              "set job_id=null, task_id=null, unique_id=null, started=0, started_date=null, finished=0, finished_date=null, "
+              "error_code=0, error_message=null, priority=null, username=null, machine_hostname=null, machine_average_load=null, comments=null " 
               "where error_code > 0")
 
-if reset_unifinished_intervals_to_clear_job_id:
-    print("=== reset_unifinished_intervals_to_clear_job_id ===")
+if reset_unfinished_intervals_to_clear_job_id:
+    print("=== reset_unfinished_intervals_to_clear_job_id ===")
     run_query("update " + INTERVALS_TABLE +
-              "set job_id=NULL, comments=NULL, unique_id=NULL, task_id=NULL, started=0, started_date=NULL, error_message=NULL, error_code=0, finished=0, error_message=NULL "
+              "set job_id=null, task_id=null, unique_id=null, started=0, started_date=null, finished=0, finished_date=null, "
+              "error_code=0, error_message=null, priority=null, username=null, machine_hostname=null, machine_average_load=null, comments=null " 
               "where finished=0")
 
 
