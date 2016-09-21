@@ -134,6 +134,9 @@ def generate_combined_bam(base_dir, reassembled_bam_paths, temp_combined_bam_pat
     run(("java -jar %(picard_jar)s SortSam VALIDATION_STRINGENCY=LENIENT "
          "I=%(temp_combined_bam_path)s O=%(combined_bam_path)s SO=coordinate CREATE_INDEX=true") % locals())
     run("rm %(temp_combined_bam_path)s" % locals())
+    
+    bai_path = combined_bam_path.replace(".bam", ".bai")
+    run("mv %(bai_path)s %(combined_bam_path)s.bai" % locals())
 
 
 def generate_sqlite_db(variants_to_process, temp_sqlite_db_path, sqlite_db_path):
