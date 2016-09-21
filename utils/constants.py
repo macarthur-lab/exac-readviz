@@ -1,4 +1,4 @@
-import logging
+B0;95;0cimport logging
 import os
 
 from utils.file_utils import does_file_exist
@@ -10,7 +10,7 @@ DB_USER = 'root'
 DATA_DIR_PREFIX = '/humgen/atgu1/fs03/weisburd/exac_readviz_scripts_data' 
 BIN_DIR_PREFIX = os.path.join(DATA_DIR_PREFIX, 'bin') 
 #BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
-BAM_OUTPUT_DIR = "/humgen/atgu1/fs03/weisburd/exac_readviz_output/"
+BAM_OUTPUT_DIR = "/humgen/atgu1/fs03/weisburd/exac_readviz_output_v2/"
 
 EXIT_UGER_JOB_AFTER_N_HOURS = 0.5    # if running a processing loop in a UGER job, exit after this many hours to avoid getting killed by the short queue time limit.
 
@@ -32,18 +32,19 @@ NUM_OUTPUT_DIRECTORIES_L1 = 1000
 INCLUDE_N_ADJACENT_CALLING_REGIONS = 2
 
 EXAC_CALLING_INTERVALS_PATH = os.path.join(DATA_DIR_PREFIX, "exome_calling_regions.v1.interval_list")
-EXAC_INFO_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3_meta_Final.tsv")
-EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
-EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
-EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3.1.sites.vep.vcf.gz")
+#EXAC_INFO_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3_meta_Final.tsv")
+#EXAC_POP_SEX_TABLE_PATH = os.path.join(DATA_DIR_PREFIX, "samples_pop_sex.tsv")
+#EXAC_FULL_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "exac_all.vcf.gz")
+#EXAC_SITES_VCF_PATH = os.path.join(DATA_DIR_PREFIX, "ExAC.r0.3.1.sites.vep.vcf.gz")
 GENCODE_EXAC_GTF_PATH = os.path.join(DATA_DIR_PREFIX, "gencode.gtf.gz")
 
 PICARD_JAR_PATH = os.path.join(BIN_DIR_PREFIX,"picard.jar")  # used for sorting bam
+GATK_JAR_PATH = "/humgen/gsa-hpprojects/GATK/bin/GenomeAnalysisTK-3.4-46-gbc02625/GenomeAnalysisTK.jar"
 
-GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+#GATK_JAR_PATH = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)),
 #    "bin/noMQ0sInBamout/GenomeAnalysisTK.jar"))
 #    "bin/GATK_noMQ0sInBamout_fixRealign.jar"))
-     "bin/GATK_readVizFix_071116.jar"))
+#     "bin/GATK_readVizFix_071116.jar"))
 
 TCGA_NEW_BAM_PATHS = os.path.join(DATA_DIR_PREFIX, "TCGA_external_cghublink_all.tsv")
 
