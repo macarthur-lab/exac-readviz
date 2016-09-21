@@ -2,6 +2,14 @@
 This script generates HC-reassembled bams by processing records in the Sample table
 """
 
+import logging
+logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s: %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p')
+
+logging.info("compute_HC_bams_from_sample_table - running")
+
 import configargparse
 
 from utils.exac_info_table import lookup_original_bam_path
@@ -17,17 +25,16 @@ import signal
 import time
 import traceback
 
+logging.info("compute_HC_bams_from_sample_table - done with imports - #1")
+
 from utils.database import init_db, Sample, _readviz_db
+logging.info("compute_HC_bams_from_sample_table - done with imports - #2")
+
 from utils.constants import BAM_OUTPUT_DIR, MAX_SAMPLES_TO_SHOW_PER_VARIANT, BACKUP_SAMPLES_IN_CASE_OF_ERRORS
+logging.info("compute_HC_bams_from_sample_table - done with imports - #3")
 
 from utils.haplotype_caller import run_haplotype_caller
-
-import logging
-logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s: %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p')
-
+logging.info("compute_HC_bams_from_sample_table - done with imports - #4")
 
 CTRL_C_SIGNAL = False
 def signal_handler(signal, frame):
@@ -184,7 +191,7 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
     p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default=BAM_OUTPUT_DIR)
-    p.add("--chrom", help="If specified, only process this chromosome")
+    p.add("--chrom", help="If specified, only process this chromosome", nargs="*")
     p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
     p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int, default=10**10)
 
@@ -209,9 +216,6 @@ if __name__ == "__main__":
     # db = init_db()  # commented out to avoid overloading database initially.
     db = _readviz_db
 
-    logging.info("Processing remaining samples in sample table")
-    sample_record_iterator = create_sample_record_iterator(chrom=args.chrom, start_pos=args.start_pos, end_pos=args.end_pos)
-
     try:
         from pyinstrument import Profiler
         profiling_enabled = True
@@ -224,7 +228,15 @@ if __name__ == "__main__":
         profiler.start()
 
     # process the samples
-    main(sample_iterator=sample_record_iterator, bam_output_dir=args.bam_output_dir, exit_after_minutes=args.exit_after)
+    logging.info("Processing remaining samples in sample table")
+    if not args.chrom:
+        chromosomes = [None]
+    else:
+        chromosomes = args.chrom
+
+    for chrom in args.chrom:
+        sample_record_iterator = create_sample_record_iterator(chrom=chrom, start_pos=args.start_pos, end_pos=args.end_pos)
+        main(sample_iterator=sample_record_iterator, bam_output_dir=args.bam_output_dir, exit_after_minutes=args.exit_after)
 
     if profiling_enabled:
         profiler.stop()
