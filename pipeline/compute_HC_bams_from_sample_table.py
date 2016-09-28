@@ -191,7 +191,7 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
     p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default=BAM_OUTPUT_DIR)
-    p.add("--chrom", help="If specified, only process this chromosome", nargs="*")
+    p.add("--chrom", help="If specified, only process this chromosome", action="append")
     p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
     p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int, default=10**10)
 
@@ -232,9 +232,11 @@ if __name__ == "__main__":
     if not args.chrom:
         chromosomes = [None]
     else:
+        logging.info("chrom args: %s" % str(args.chrom))
         chromosomes = args.chrom
 
-    for chrom in args.chrom:
+    for chrom in chromosomes:
+        logging.info("Processing chrom: %s" % chrom)
         sample_record_iterator = create_sample_record_iterator(chrom=chrom, start_pos=args.start_pos, end_pos=args.end_pos)
         main(sample_iterator=sample_record_iterator, bam_output_dir=args.bam_output_dir, exit_after_minutes=args.exit_after)
 
