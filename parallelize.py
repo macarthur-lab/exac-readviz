@@ -260,7 +260,7 @@ if not is_startup or args.run_local:
         interval_started_time = datetime.datetime.now()
 
         hours_since_task_started = (interval_started_time - task_started_time).total_seconds()/3600.0
-        if hours_since_task_started > EXIT_UGER_JOB_AFTER_N_HOURS:   # TODO check if args.run_on_LSF
+        if not args.run_local and hours_since_task_started > EXIT_UGER_JOB_AFTER_N_HOURS:   # TODO check if args.run_on_LSF
             logging.info("Job has been running for %s hours. UGER short queue time limit is coming up. Exiting to avoid getting killed." % hours_since_task_started)
             break
 
