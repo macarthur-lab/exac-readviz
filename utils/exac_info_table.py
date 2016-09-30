@@ -15,7 +15,6 @@ import os
 import re
 from tqdm import tqdm
 
-from utils.constants import EXAC_INFO_TABLE_PATH, EXAC_POP_SEX_TABLE_PATH
 from utils.constants import TCGA_NEW_BAM_PATHS
 
 def parse_exac_info_table(info_table_path):
@@ -66,66 +65,72 @@ def parse_exac_pop_sex_table(pop_sex_table_path):
             sample_id_to_sex[vcf_sample_id] = sex
 
     return sample_id_to_population, sample_id_to_sex
+    
+
+try:
+    from utils.constants import EXAC_INFO_TABLE_PATH, EXAC_POP_SEX_TABLE_PATH
+    assert os.path.isfile(EXAC_INFO_TABLE_PATH), \
+        "Couldn't find exac info table: %s" % EXAC_INFO_TABLE_PATH
+
+    assert os.path.isfile(EXAC_POP_SEX_TABLE_PATH), \
+        "Couldn't find exac pop sex table: %s" % EXAC_POP_SEX_TABLE_PATH
+    
+
+    (EXAC_SAMPLE_ID_TO_BAM_PATH,
+     EXAC_SAMPLE_ID_TO_GVCF_PATH,
+     EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(EXAC_INFO_TABLE_PATH)
+
+    assert len(EXAC_SAMPLE_ID_TO_BAM_PATH) == len(EXAC_SAMPLE_ID_TO_GVCF_PATH)
+    assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
+    
+
+    n_total = len(EXAC_SAMPLE_ID_TO_BAM_PATH)
+    n_include_true = sum(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.values())
+    
+    logging.info("Loaded %s" % EXAC_INFO_TABLE_PATH)
+    logging.info("INCLUDE_STATUS = True in %d out of %d (%0.1f%%) samples" % (
+        n_include_true, n_total, 100*n_include_true/float(n_total)))
 
 
+    (EXAC_SAMPLE_ID_TO_POP,
+     EXAC_SAMPLE_ID_TO_SEX) = parse_exac_pop_sex_table(EXAC_POP_SEX_TABLE_PATH)
 
-assert os.path.isfile(EXAC_INFO_TABLE_PATH), \
-    "Couldn't find exac info table: %s" % EXAC_INFO_TABLE_PATH
+    n_male = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'm'])
+    n_female = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'f'])
 
-assert os.path.isfile(EXAC_POP_SEX_TABLE_PATH), \
-    "Couldn't find exac pop sex table: %s" % EXAC_POP_SEX_TABLE_PATH
+    assert n_male + n_female == len(EXAC_SAMPLE_ID_TO_POP), \
+        "n_male (%s) + n_female (%s) != len(EXAC_SAMPLE_ID_TO_POP) (%s)" % (n_male, n_female, len(EXAC_SAMPLE_ID_TO_POP))
 
-
-(EXAC_SAMPLE_ID_TO_BAM_PATH,
- EXAC_SAMPLE_ID_TO_GVCF_PATH,
- EXAC_SAMPLE_ID_TO_INCLUDE_STATUS) = parse_exac_info_table(EXAC_INFO_TABLE_PATH)
-
-assert len(EXAC_SAMPLE_ID_TO_BAM_PATH) == len(EXAC_SAMPLE_ID_TO_GVCF_PATH)
-assert len(EXAC_SAMPLE_ID_TO_GVCF_PATH) == len(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS)
-
-n_total = len(EXAC_SAMPLE_ID_TO_BAM_PATH)
-n_include_true = sum(EXAC_SAMPLE_ID_TO_INCLUDE_STATUS.values())
-
-logging.info("Loaded %s" % EXAC_INFO_TABLE_PATH)
-logging.info("INCLUDE_STATUS = True in %d out of %d (%0.1f%%) samples" % (
-    n_include_true, n_total, 100*n_include_true/float(n_total)))
+    logging.info("Loaded %s" % EXAC_POP_SEX_TABLE_PATH)
+    logging.info("%d male, %d female" % (n_male, n_female))
+except Exception, e:
+    print("WARNING: " + str(e))
 
 
-(EXAC_SAMPLE_ID_TO_POP,
- EXAC_SAMPLE_ID_TO_SEX) = parse_exac_pop_sex_table(EXAC_POP_SEX_TABLE_PATH)
+try:
+    # Parse the new TCGA bam paths
+    with open(TCGA_NEW_BAM_PATHS) as f:
+        for line in f:
+            fields = line.strip('\n').split('\t')
+            tcga_sample_id = fields[0]
 
-n_male = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'm'])
-n_female = len([s for s in EXAC_SAMPLE_ID_TO_SEX.values() if s == 'f'])
+            assert tcga_sample_id in EXAC_SAMPLE_ID_TO_GVCF_PATH
+            assert tcga_sample_id in EXAC_SAMPLE_ID_TO_BAM_PATH
 
-assert n_male + n_female == len(EXAC_SAMPLE_ID_TO_POP), \
-    "n_male (%s) + n_female (%s) != len(EXAC_SAMPLE_ID_TO_POP) (%s)" % (n_male, n_female, len(EXAC_SAMPLE_ID_TO_POP))
+            tcga_gvcf_path = fields[5]
+            tcga_bam_path = fields[-1]
 
-logging.info("Loaded %s" % EXAC_POP_SEX_TABLE_PATH)
-logging.info("%d male, %d female" % (n_male, n_female))
+            #if not os.path.isfile(tcga_gvcf_path): print("ERROR: vcf file not found: " + tcga_gvcf_path)
+            #if not os.path.isfile(tcga_bam_path): print("ERROR: bam file not found: " + tcga_gvcf_path)
 
+            assert EXAC_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] == tcga_gvcf_path
+            #print('---\n%s\n%s' % (EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id], tcga_bam_path))
+            
+            EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = tcga_bam_path
+except Exception, e:
+    print("WARNING: " + str(e))
 
-
-
-# Parse the new TCGA bam paths
-with open(TCGA_NEW_BAM_PATHS) as f:
-    for line in f:
-        fields = line.strip('\n').split('\t')
-        tcga_sample_id = fields[0]
-
-        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_GVCF_PATH
-        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_BAM_PATH
-
-        tcga_gvcf_path = fields[5]
-        tcga_bam_path = fields[-1]
-
-        #if not os.path.isfile(tcga_gvcf_path): print("ERROR: vcf file not found: " + tcga_gvcf_path)
-        #if not os.path.isfile(tcga_bam_path): print("ERROR: bam file not found: " + tcga_gvcf_path)
-
-        assert EXAC_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] == tcga_gvcf_path
-        #print('---\n%s\n%s' % (EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id], tcga_bam_path))
-
-        EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = tcga_bam_path
-
+    
 
 
 def lookup_original_bam_path(sample_id):
