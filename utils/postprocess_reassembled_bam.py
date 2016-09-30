@@ -73,9 +73,13 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     # iterate over the reads
     raw_reads = {}  # maps each artificial haplotype id (eg. HC tag value) to the list of reads assigned to this haplotype (eg. that have this id in their HC tag)
     ibam = pysam.AlignmentFile(input_bam_path, "rb")
+
     for r in ibam:
         tags = dict(r.tags)
-        haplotype_id = tags['HC']
+        if 'HC' not in tags:
+            continue      # skip reads without an 'HC' tag - they don't count towards the AD so are already getting ignored in some ways
+
+        haplotype_id = tags['HC'] 
         if tags.get('RG') == "ArtificialHaplotype":
             # handle reads that are actually artificial haplotypes
             artificial_haplotype_counter += 1
