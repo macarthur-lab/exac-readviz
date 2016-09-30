@@ -205,8 +205,8 @@ def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
 
     # create iterator over variants in this bin
     variants_to_process = [v for v in peewee.RawQuery(Variant,  (
-        "select * from variant where chrom='%s' and pos %%%% 1000 = %s"
-    ) % (chrom, position_hash)).execute()]
+        "select * from %s where chrom='%s' and pos %%%% 1000 = %s"
+    ) % (Variant._meta.db_table, chrom, position_hash)).execute()]
 
     # choose the samples to combine, and get their reassembled bam paths
     all_chosen_bam_paths_in_db = choose_samples_to_combine(variants_to_process)
