@@ -20,6 +20,7 @@ configargparse.initArgumentParser(
 
 import collections
 import datetime
+import pysam
 import random
 import signal
 import time
@@ -30,11 +31,15 @@ logging.info("compute_HC_bams_from_sample_table - done with imports - #1")
 from utils.database import init_db, Sample, _readviz_db
 logging.info("compute_HC_bams_from_sample_table - done with imports - #2")
 
-from utils.constants import BAM_OUTPUT_DIR, MAX_SAMPLES_TO_SHOW_PER_VARIANT, BACKUP_SAMPLES_IN_CASE_OF_ERRORS
+from utils.constants import BAM_OUTPUT_DIR, MAX_SAMPLES_TO_SHOW_PER_VARIANT, BACKUP_SAMPLES_IN_CASE_OF_ERRORS, HUMAN_GENOME_FASTA_PATH
+PYSAM_FASTA = pysam.FastaFile(HUMAN_GENOME_FASTA_PATH)
+
 logging.info("compute_HC_bams_from_sample_table - done with imports - #3")
 
 from utils.haplotype_caller import run_haplotype_caller
 logging.info("compute_HC_bams_from_sample_table - done with imports - #4")
+
+from utils.normalize import normalize
 
 CTRL_C_SIGNAL = False
 def signal_handler(signal, frame):
@@ -83,6 +88,7 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             counters[sr.het_or_hom_or_hemi+"_sample_already_done"] += 1
             continue
 
+        # compute sample_i if it hasn't been already - this doesn't work that well because race condition may (on rare occasion) cause 2 records to have the same sample_i
         if sr.sample_i is None:
             available_sample_ids = [
                 s.id for s in Sample.select().where(
@@ -98,8 +104,9 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             logging.info("%s-%s-%s-%s %s - computed sample_i: %s" % (
                 sr.chrom, sr.pos, sr.ref, sr.alt, sr.het_or_hom_or_hemi, sr.sample_i))
 
-        sr.original_bam_path = lookup_original_bam_path(sr.sample_id)  # recompute the original bam path in case it's changed
-        sr.save()
+        if sr.original_bam_path is None:
+            sr.original_bam_path = lookup_original_bam_path(sr.sample_id)  # recompute the original bam path in case it's changed
+            sr.save()
 
         if sr.sample_i >= MAX_SAMPLES_TO_SHOW_PER_VARIANT + BACKUP_SAMPLES_IN_CASE_OF_ERRORS:
             logging.info("%s-%s-%s-%s %s - sample_i too large. Skipping: %s" % (
@@ -107,19 +114,47 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             sr.delete_instance()
             continue
 
+        # make sure the variant is normalized
+        if len(sr.ref) > 1 and len(sr.alt) > 1:
+            #variant_records = list(
+            #    Variant.select().where((Variant.chrom == sr.chrom) & (Variant.pos == sr.pos) & (Variant.ref == sr.ref) & (Variant.alt == sr.alt)))
+
+            # normalize and update sample record and variant records
+            (sr.chrom, sr.pos, sr.ref, sr.alt) = normalize(PYSAM_FASTA, str(sr.chrom), sr.pos, sr.ref, sr.alt)
+            sr.variant_id = "%s-%s-%s-%s" % (sr.chrom, sr.pos, sr.ref, sr.alt)
+            sr.save()
+            #for v in variant_records:
+            #    (v.chrom, v.pos, v.ref, v.alt, v.variant_id) = (sr.chrom, sr.pos, sr.ref, sr.alt, sr.variant_id)
+            #    v.save()
+
+        # check whether MAX_SAMPLES_TO_SHOW_PER_VARIANT have already been generated, and skip if yes
+        if sr.sample_i >= MAX_SAMPLES_TO_SHOW_PER_VARIANT:
+            # check whether enough samples have already been generated for this site
+            num_samples_already_finished = len([s.id for s in Sample.select().where(
+                (Sample.chrom == sr.chrom) & (Sample.pos == sr.pos) & (Sample.ref == sr.ref) & (Sample.alt == sr.alt) &
+                (Sample.het_or_hom_or_hemi == sr.het_or_hom_or_hemi) & (Sample.started == 1 & Sample.finished == 1))])
+            if num_samples_already_finished >= MAX_SAMPLES_TO_SHOW_PER_VARIANT:
+                sr.started = 1
+                sr.finished = 1
+                sr.hc_error_code = 5000   
+                sr.hc_error_text = "not needed"
+                sr.save()
+                continue
+
+
         try:
             run_haplotype_caller(
-                    sr.chrom,
-                    sr.pos,
-                    sr.ref,
-                    sr.alt,
-                    sr.het_or_hom_or_hemi,
-                    original_bam_path=sr.original_bam_path,
-                    original_gvcf_path=sr.original_gvcf_path,
-                    sample_id=sr.sample_id,
-                    sample_i=sr.sample_i,
-                    all_bam_output_dir=bam_output_dir,
-                    only_choose_samples=False,
+                sr.chrom,
+                sr.pos,
+                sr.ref,
+                sr.alt,
+                sr.het_or_hom_or_hemi,
+                original_bam_path=sr.original_bam_path,
+                original_gvcf_path=sr.original_gvcf_path,
+                sample_id=sr.sample_id,
+                sample_i=sr.sample_i,
+                all_bam_output_dir=bam_output_dir,
+                only_choose_samples=False,
             )
         except Exception as e:
             logging.error("%s-%s-%s-%s %s - error in run_haplotype_caller: %s" % (
@@ -142,6 +177,7 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
     """
 
     where_condition = (Sample.started == 0) & (Sample.finished == 0)
+    where_condition = where_condition & (Sample.priority == 1)
     if chrom is not None:
         where_condition = where_condition & (Sample.chrom == chrom)
     if start_pos is not None:
@@ -152,7 +188,9 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
     while True:
         # get the next Sample to process
         randomized_sample_num = random.randint(1, 1000)
-        unprocessed_samples = Sample.select().where(where_condition).limit(randomized_sample_num)
+        unprocessed_samples = Sample.select().where(where_condition).order_by(
+            Sample.sample_i.asc()).limit(randomized_sample_num)
+
         unprocessed_samples_list = list(unprocessed_samples)
         if len(unprocessed_samples_list) == 0:
             logging.info("Finished all samples. Exiting..")
