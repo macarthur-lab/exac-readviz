@@ -3,10 +3,10 @@
 export TERM=xterm
 source /broad/software/scripts/useuse
 
-use Java-1.7
-use UGER
-use Python-2.7
-use Samtools
+reuse Java-1.7
+reuse UGER
+reuse Python-2.7
+reuse Samtools
 
 echo "Launching array with $1 tasks";
 
