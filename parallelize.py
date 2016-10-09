@@ -56,7 +56,7 @@ p.add_argument("command", nargs="+", help="The command to parallelize. The comma
 args, unknown_args = p.parse_known_args()
 db_table_name = "%s_i%d" % ("_".join([a[0:8] for a in args.command + unknown_args if not a.startswith("-")][0:2]), args.interval_size)
 db_table_name = slugify.slugify(db_table_name).replace("-", "_")  # remove special chars
-
+args.log_dir = os.path.join(args.log_dir, getpass.getuser())
 args.command = " ".join(args.command + unknown_args)
 
 logging.info("args: command: " + args.command)
@@ -243,7 +243,7 @@ if not is_startup or args.run_local:
         #with db.atomic() as txn:
         #db.execute_sql("LOCK TABLE %s WRITE" % db_table_name)
         #unprocessed_intervals =  ParallelIntervals.raw("SELECT * FROM %s WHERE job_id is NULL and task_id is NULL and unique_id is NULL" % db_table_name)
-        randomized_variant_num = random.randint(1, 1000)  # used to reduce chance of collisions
+        randomized_variant_num = random.randint(1, 2000)  # used to reduce chance of collisions
 
         where_clause = (ParallelIntervals.started == 0) & (ParallelIntervals.finished == 0)
         if args.chrom:
@@ -286,6 +286,7 @@ if not is_startup or args.run_local:
         current_interval.machine_hostname = os.getenv('HOSTNAME', '')[0:100]
         current_interval.machine_average_load = os.getloadavg()[-1]
         #current_interval.comments = str(current_interval.comments or "") + "__s_%s_id%s_%s" % (job_id, array_job_task_id, unique_8_digit_id)
+        current_interval.save()
 
         cmd = "%s --chrom %s --start-pos %s --end-pos %s" % (args.command,
             current_interval.chrom, current_interval.start_pos, current_interval.end_pos)
