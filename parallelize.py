@@ -99,6 +99,7 @@ class ParallelIntervals(peewee.Model):
         db_table = db_table_name
         database = db
         indexes=(
+            (('started', 'finished', 'chrom'), False), # True means unique index
             (('chrom', 'start_pos', 'end_pos'), True), # True means unique index
             (('job_id', 'task_id', 'unique_id'), False),  # not unique because a given task can process multiple intervals
         )
@@ -160,7 +161,7 @@ if is_startup:
                 batch_start, min(len(final_intervals), batch_start + insert_batch_size)))
             batch = final_intervals[batch_start: batch_start + insert_batch_size]
             ParallelIntervals.insert_many(batch).execute()
-
+            #logging.info("Done inserting batch")
         assert ParallelIntervals.select().count() == len(final_intervals), \
             "Number of intervals in database (%s) != expected number (%s)" % (
                 ParallelIntervals.select().count(), len(final_intervals))
