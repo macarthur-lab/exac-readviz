@@ -92,6 +92,8 @@ class Sample(_SharedVariantFields):
     sample_id = peewee.CharField(index=True, max_length=MAX_VCF_SAMPLE_ID_SIZE)
     sample_i = peewee.IntegerField(null=True)
 
+    pos_mod_1000 = peewee.IntegerField(null=True)
+
     original_bam_path = peewee.TextField(null=True)
     original_gvcf_path = peewee.TextField(null=True)
     output_bam_path = peewee.TextField(null=True)
