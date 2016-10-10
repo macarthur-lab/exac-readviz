@@ -38,7 +38,7 @@ reset_samples_with_original_bams_marked_missing_due_to_transient_error = 0
 
 reset_samples_with_transient_error = 1
 reset_samples_with_original_bams_marked_missing_due_to_transient_error = 1
-reset_unfinished_samples_in_finished_chroms = 1
+#reset_unfinished_samples_in_finished_chroms = 1
 reset_intervals_that_contain_unfinished_samples = 1
 
 #reset_unfinished_intervals_to_clear_job_id = 1
@@ -148,7 +148,7 @@ if reset_variants_with_transient_errors:
                "and v.n_available_samples>=0 and v.n_available_samples<v.n_expected_samples"))
 
 ALL_CHROMS = list(map(str, [1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,3,4,5,6,7,8,9, 'X','Y']))
-FINISHED_CHROMS = list(map(str, [1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,3,4,5,6])) #21,22,3,4,5,6,7,8,9, 'X','Y']))
+FINISHED_CHROMS = list(map(str, [1,10,11,12,13,14,15,16,17,18,19,2,20,21,22,3,4,5,6])) 
 FINISHED_CHROMS_STRING = str(tuple(map(str, FINISHED_CHROMS))).replace(",)", ")") #
 
 
@@ -314,6 +314,7 @@ if reset_intervals_that_contain_unfinished_variants:
                         #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
                         break
                 else:
+                    #print("WARNING: %(chrom)s-%(pos)s is not in any intervals" % locals())
                     raise ValueError("%(chrom)s-%(pos)s is not in any intervals" % locals())
 
             #else:
@@ -340,14 +341,15 @@ if reset_samples_with_transient_error:
                    "where hc_error_code >= 2000 and hc_error_code < 3000") % locals())
 
 if reset_unfinished_samples_in_finished_chroms:
-    run_query("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
-              "where chrom in %(FINISHED_CHROMS_STRING)s and started in (0, 1) and finished=0" % locals())
+    for chrom in FINISHED_CHROMS:
+        run_query("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
+              "where chrom='%(chrom)s' and started=1 and finished=0" % locals())
 
 
 if reset_intervals_that_contain_unfinished_samples:
     print("=== reset_intervals_that_contain_unfinished_samples ===")
-    for current_chrom in ALL_CHROMS:
-        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 order by pos asc" % locals())
+    for current_chrom in FINISHED_CHROMS:
+        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 order by chrom, pos asc" % locals())
         all_unfinished_samples = c.fetchall()
 
         unfinished_intervals = set()
@@ -362,11 +364,12 @@ if reset_intervals_that_contain_unfinished_samples:
                         current_interval = i
                         if i[4] > 0:
                             unfinished_intervals.add(i)
-                            #print("%s: %s" % (len(unfinished_intervals), i))
+                            print("%s: %s" % (len(unfinished_intervals), i))
                         #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
                         break
                 else:
-                    raise ValueError("%(chrom)s-%(pos)s is not in any intervals" % locals())
+                    print("WARNING: %(chrom)s-%(pos)s is not in any intervals" % locals())
+                    #raise ValueError("%(chrom)s-%(pos)s is not in any intervals" % locals())
 
             #else:
                 #print("%(chrom)s %(pos)s is in same interval %(current_interval)s" % locals())
