@@ -131,19 +131,8 @@ except Exception, e:
     print("WARNING: " + str(e))
 
     
-
-
-def lookup_original_bam_path(sample_id):
-    """Look up the bam path for the given sample id.
-
-    Args:
-      sample_id: vcf sample id
-    Return:
-      The original bam path
-    """
-
-    # work-arounds for relocated .bams taken from @birndle's igv_spot_checking script
-    bam_path = EXAC_SAMPLE_ID_TO_BAM_PATH[sample_id]
+def compute_latest_bam_path(bam_path):
+    """Compute current bam path"""
 
     #if "/cga/pancan2/picard_bams/ext_tcga" in bam_path:
     #    bam_path = bam_path.replace("/cga/pancan2/", "/cga/fh/cga_pancan2/")
@@ -159,3 +148,18 @@ def lookup_original_bam_path(sample_id):
     bam_path = re.sub("/v[0-9]{1,2}/", "/current/", bam_path)  # get latest version of the bam
 
     return bam_path
+
+
+def lookup_original_bam_path(sample_id):
+    """Look up the bam path for the given sample id.
+
+    Args:
+      sample_id: vcf sample id
+    Return:
+      The original bam path
+    """
+
+    # work-arounds for relocated .bams taken from @birndle's igv_spot_checking script
+    bam_path = EXAC_SAMPLE_ID_TO_BAM_PATH[sample_id]
+
+    return compute_latest_bam_path(bam_path)
