@@ -12,7 +12,7 @@ logging.info("compute_HC_bams_from_sample_table - running")
 
 import configargparse
 
-from utils.exac_info_table import lookup_original_bam_path
+from utils.exac_info_table import compute_latest_bam_path
 
 configargparse.initArgumentParser(
         default_config_files=["~/.generate_HC_bams_config"],
@@ -32,8 +32,6 @@ from utils.database import init_db, Sample, _readviz_db
 logging.info("compute_HC_bams_from_sample_table - done with imports - #2")
 
 from utils.constants import BAM_OUTPUT_DIR, MAX_SAMPLES_TO_SHOW_PER_VARIANT, BACKUP_SAMPLES_IN_CASE_OF_ERRORS, HUMAN_GENOME_FASTA_PATH
-PYSAM_FASTA = pysam.FastaFile(HUMAN_GENOME_FASTA_PATH)
-
 logging.info("compute_HC_bams_from_sample_table - done with imports - #3")
 
 from utils.haplotype_caller import run_haplotype_caller
@@ -88,6 +86,11 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             counters[sr.het_or_hom_or_hemi+"_sample_already_done"] += 1
             continue
 
+        # compute pos_mod_1000 if it hasn't been yet
+        sr.pos_mod_1000 = sr.pos % 1000 
+
+        #time.sleep(5000) # sleep to reduce load on the db
+
         # compute sample_i if it hasn't been already - this doesn't work that well because race condition may (on rare occasion) cause 2 records to have the same sample_i
         if sr.sample_i is None:
             available_sample_ids = [
@@ -104,8 +107,9 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             logging.info("%s-%s-%s-%s %s - computed sample_i: %s" % (
                 sr.chrom, sr.pos, sr.ref, sr.alt, sr.het_or_hom_or_hemi, sr.sample_i))
 
-        if sr.original_bam_path is None:
-            sr.original_bam_path = lookup_original_bam_path(sr.sample_id)  # recompute the original bam path in case it's changed
+        updated_bam_path = compute_latest_bam_path(sr.original_bam_path)  # recompute the original bam path in case it's changed
+        if sr.original_bam_path != updated_bam_path:
+            sr.original_bam_path = updated_bam_path
             sr.save()
 
         if sr.sample_i >= MAX_SAMPLES_TO_SHOW_PER_VARIANT + BACKUP_SAMPLES_IN_CASE_OF_ERRORS:
@@ -120,6 +124,7 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
             #    Variant.select().where((Variant.chrom == sr.chrom) & (Variant.pos == sr.pos) & (Variant.ref == sr.ref) & (Variant.alt == sr.alt)))
 
             # normalize and update sample record and variant records
+            PYSAM_FASTA = pysam.FastaFile(HUMAN_GENOME_FASTA_PATH)
             (sr.chrom, sr.pos, sr.ref, sr.alt) = normalize(PYSAM_FASTA, str(sr.chrom), sr.pos, sr.ref, sr.alt)
             sr.variant_id = "%s-%s-%s-%s" % (sr.chrom, sr.pos, sr.ref, sr.alt)
             sr.save()
@@ -177,7 +182,8 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
     """
 
     where_condition = (Sample.started == 0) & (Sample.finished == 0)
-    where_condition = where_condition & (Sample.priority == 1)
+    where_condition = where_condition & (Sample.sample_i <= 1)
+    #where_condition = where_condition & (Sample.priority == 1)
     if chrom is not None:
         where_condition = where_condition & (Sample.chrom == chrom)
     if start_pos is not None:
