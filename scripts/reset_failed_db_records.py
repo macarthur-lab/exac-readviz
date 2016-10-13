@@ -20,7 +20,6 @@ reset_variants_that_contain_unfinished_samples = 0
 reset_intervals_that_contain_unfinished_variants = 0
 reset_intervals_that_contain_unfinished_samples = 0
 reset_unfinished_intervals_to_clear_job_id = 0
-reset_unfinished_samples_in_finished_chroms = 0
 run_stat_queries = 0
 reset_unfinished_samples_in_finished_chroms = 0
 set_intervals_where_all_contained_variants_have_finished = 0
@@ -38,7 +37,7 @@ reset_samples_with_original_bams_marked_missing_due_to_transient_error = 0
 
 reset_samples_with_transient_error = 1
 reset_samples_with_original_bams_marked_missing_due_to_transient_error = 1
-#reset_unfinished_samples_in_finished_chroms = 1
+reset_unfinished_samples_in_finished_chroms = 1
 reset_intervals_that_contain_unfinished_samples = 1
 
 #reset_unfinished_intervals_to_clear_job_id = 1
@@ -349,7 +348,7 @@ if reset_unfinished_samples_in_finished_chroms:
 if reset_intervals_that_contain_unfinished_samples:
     print("=== reset_intervals_that_contain_unfinished_samples ===")
     for current_chrom in FINISHED_CHROMS:
-        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 order by chrom, pos asc" % locals())
+        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 and s.sample_i <= 1 order by chrom, pos asc" % locals())
         all_unfinished_samples = c.fetchall()
 
         unfinished_intervals = set()
