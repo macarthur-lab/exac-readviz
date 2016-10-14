@@ -1,19 +1,24 @@
 """Remove samples from sample table that were dropped due to QC, etc."""
 
 import os
+import sys
 from tqdm import tqdm
 from utils.exac_info_table import compute_latest_bam_path
 from utils.database import Sample, _readviz_db
 
 
-#all_current_samples = set(s[0] for s in _readviz_db.execute_sql("select distinct sample_id from sample"))
-#print(all_current_samples)
-#print(len(all_current_samples))
+all_current_samples = set(s[0] for s in _readviz_db.execute_sql("select distinct sample_id from sample"))
+samples_to_keep = set(line.strip() for line in open("scripts/final_samples.tsv"))
+samples_to_delete = list(all_current_samples - samples_to_keep)
 
-#sys.exit(0)
+print("database has %s current samples" % len(all_current_samples))
+print("keeping %s samples" % len(samples_to_keep))
+print("samples to delete: %s" % len(samples_to_delete))
+if raw_input("continue? [y/n]") != "y":
+    sys.exit(0)
+
 test_run = False
-for line in open(os.path.join(os.path.dirname(__file__), "samples_to_drop.txt")):
-    sample_id = line.strip()        
+for sample_id in samples_to_delete:
     print("Processing %s" % sample_id)
     samples_to_delete = list(Sample.select().where(Sample.sample_id == sample_id).order_by(Sample.sample_id.asc()).execute())
     for s in samples_to_delete:
