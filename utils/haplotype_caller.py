@@ -124,7 +124,7 @@ def run_haplotype_caller(
     absolute_output_dir = os.path.dirname(temp_output_bam_path)
     if not os.path.isdir(absolute_output_dir):
         logging.debug("creating directory: %s" % absolute_output_dir)
-        run("mkdir -p %(absolute_output_dir)s; chmod 777 %(absolute_output_dir)s %(absolute_output_dir)s/.. " % locals())
+        run("mkdir -m 0777 -p %(absolute_output_dir)s" % locals()) 
 
     dash_L_intervals = list(itertools.chain.from_iterable(
         [('-L', str(interval)) for interval in left_i + [i] + right_i]))
