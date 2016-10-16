@@ -182,7 +182,7 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
     """
 
     where_condition = (Sample.started == 0) & (Sample.finished == 0)
-    where_condition = where_condition & (Sample.sample_i <= 1)
+    where_condition = where_condition & (Sample.sample_i <= 2)
     #where_condition = where_condition & (Sample.priority == 1)
     if chrom is not None:
         where_condition = where_condition & (Sample.chrom == chrom)

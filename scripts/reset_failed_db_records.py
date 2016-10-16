@@ -355,7 +355,7 @@ if reset_unfinished_samples_in_finished_chroms:
 if reset_intervals_that_contain_unfinished_samples:
     print("=== reset_intervals_that_contain_unfinished_samples ===")
     for current_chrom in FINISHED_CHROMS:
-        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 and s.sample_i <= 1 order by chrom, pos asc" % locals())
+        c = run_query("select chrom, pos from sample as s where chrom='%(current_chrom)s' and s.started in (0, 1) and s.finished=0 and s.sample_i <= 2 order by chrom, pos asc" % locals())
         all_unfinished_samples = c.fetchall()
 
         unfinished_intervals = set()
