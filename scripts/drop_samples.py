@@ -14,8 +14,8 @@ samples_to_delete = list(all_current_samples - samples_to_keep)
 print("database has %s current samples" % len(all_current_samples))
 print("keeping %s samples" % len(samples_to_keep))
 print("samples to delete: %s" % len(samples_to_delete))
-if raw_input("continue? [y/n]") != "y":
-    sys.exit(0)
+#if raw_input("continue? [y/n]") != "y":
+#    sys.exit(0)
 
 test_run = False
 for sample_id in samples_to_delete:
