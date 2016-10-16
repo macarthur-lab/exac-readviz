@@ -209,7 +209,7 @@ def run_haplotype_caller(
             # save the output gvcf for debugging
             absolute_debug_dir = os.path.join(all_bam_output_dir, "debug", relative_output_dir)
             if not os.path.isdir(absolute_debug_dir):
-                run("mkdir -p %(absolute_debug_dir)s; chmod 777 %(absolute_debug_dir)s %(absolute_debug_dir)s/.." % locals())
+                run("mkdir -p %(absolute_debug_dir)s; chmod 0777 %(absolute_debug_dir)s %(absolute_debug_dir)s/.." % locals())
 
             igv_tracks = []
             for file_to_save_for_debugging in files_to_delete_on_error:
@@ -245,7 +245,7 @@ def run_haplotype_caller(
         postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, pos, ref, alt)
 
     run("rm -f %s" % temp_output_bam_path)
-    run("chmod 666 %s" % final_output_bam_path)  # in case different users run this script
+    run("chmod 0666 %s" % final_output_bam_path)  # in case different users run this script
 
     if is_reassembled_bam_empty:
         logging.info("%s-%s-%s-%s - %s - %s" % (chrom, pos, ref, alt, sample_id, "reassembled bam is empty"))
