@@ -9,12 +9,13 @@ import glob
 import logging
 import os
 import peewee
+from peewee import fn
 from playhouse import shortcuts
 import pysam
 import traceback
 
 from utils.haplotype_caller import compute_output_bam_path
-from utils.database import Variant, Sample, _SharedVariantPositionFields
+from utils.database import Sample, _SharedVariantPositionFields
 from utils.constants import BAM_OUTPUT_DIR, PICARD_JAR_PATH, MAX_SAMPLES_TO_SHOW_PER_VARIANT
 
 
@@ -34,12 +35,15 @@ def bam_path_to_dict(bam_path):
 
 
 def bam_path_to_read_group_id(bam_path):
-    return os.path.basename(bam_path.replace("chr", "").replace(".bam", ""))
+    return os.path.basename(str(bam_path).replace("chr", "").replace(".bam", ""))
 
 
-def choose_samples_to_combine(variants_to_process):
-    all_chosen_bam_paths_in_db = set()
+def get_all_samples_to_combine(variants_to_process):
+    all_successful_samples = []
     for v in variants_to_process:
+        # choose the 1st min(n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT) samples
+        v.n_expected_samples = min(v.n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
+
         successful_samples = list(Sample.select().where(
                 (Sample.chrom == v.chrom) &
                 (Sample.pos == v.pos) &
@@ -49,59 +53,45 @@ def choose_samples_to_combine(variants_to_process):
                 (Sample.hc_succeeded == 1) &
                 (Sample.started == 1) &
                 (Sample.finished == 1)
-        ).order_by(Sample.id.asc()))
+        ).order_by(Sample.id.asc()).limit(v.n_expected_samples))
 
-        # choose the 1st min(n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT) samples
-        num_samples_to_chose = min(v.n_expected_samples, MAX_SAMPLES_TO_SHOW_PER_VARIANT)
+        v.n_available_samples = len(successful_samples)
 
-        chosen_samples = successful_samples[0:num_samples_to_chose]
+        for i, s in enumerate(successful_samples):
+            s.output_bam_path2 = compute_output_bam_path(
+                s.chrom, s.pos, s.ref, s.alt, s.het_or_hom_or_hemi, i)
 
-        for i, s in enumerate(chosen_samples):
-            if s.sample_i == i:
-                s.output_bam_path2 = s.output_bam_path
-            else:
-                s.output_bam_path2 = compute_output_bam_path(
-                        s.chrom, s.pos, s.ref, s.alt, s.het_or_hom_or_hemi, i)
+            if s.output_bam_path != s.output_bam_path2:
                 print(s.output_bam_path + " => NEW OUTPUT PATH: " + s.output_bam_path2)
 
-        readviz_bam_paths_for_variant = [s.output_bam_path2 for s in chosen_samples]
-
-        if len(chosen_samples) < num_samples_to_chose:
-            logging.error("%s-%s-%s-%s %s - ERROR: expected %s samples. Found only %s successful samples in database: %s" % (
+        if v.n_available_samples < v.n_expected_samples:
+            logging.error("%s-%s-%s-%s %s - ERROR: expected %s samples. Found only %s successful samples in database" % (
                 v.chrom, v.pos, v.ref, v.alt, v.het_or_hom_or_hemi,
-                num_samples_to_chose, len(chosen_samples), ", ".join(readviz_bam_paths_for_variant)))
+                v.n_expected_samples, v.n_available_samples))
 
-        if len(readviz_bam_paths_for_variant) > len(set(readviz_bam_paths_for_variant)):
-            logging.error("%s-%s-%s-%s %s - ERROR: %s duplicate readviz bam paths: %s" % (
-                v.chrom, v.pos, v.ref, v.alt, v.het_or_hom_or_hemi,
-                len(readviz_bam_paths_for_variant) - len(set(readviz_bam_paths_for_variant)),
-                str(readviz_bam_paths_for_variant)))
+        if len(successful_samples) > len(set((s.output_bam_path for s in successful_samples))):
+            raise ValueError("%s-%s-%s-%s %s - ERROR: duplicate readviz bam paths found" % (
+                v.chrom, v.pos, v.ref, v.alt, v.het_or_hom_or_hemi))
 
-        # update variant table
-        v.n_available_samples = len(chosen_samples)
-        v.readviz_bam_paths = "|".join(readviz_bam_paths_for_variant)
-        v.save()
+        all_successful_samples.extend(successful_samples)
 
-        all_chosen_bam_paths_in_db.update(readviz_bam_paths_for_variant)
-
-    return all_chosen_bam_paths_in_db
+    return all_successful_samples
 
 
-def generate_combined_bam(base_dir, reassembled_bam_paths, temp_combined_bam_path, combined_bam_path):
-    logging.info("combining %s bams into %s" % (len(reassembled_bam_paths), combined_bam_path))
+def generate_combined_bam(base_dir, samples_to_combine, temp_combined_bam_path, combined_bam_path):
+    logging.info("combining %s bams into %s" % (len(samples_to_combine), combined_bam_path))
 
     # sort bams by position so that the reads in the combined file are roughly in sorted order
-    sorted_bam_paths = sorted(reassembled_bam_paths, key=lambda ibam_path: int(bam_path_to_dict(ibam_path)['pos']))
+    sorted_samples_to_combine = sorted(samples_to_combine, key=lambda s: int(bam_path_to_dict(s.output_bam_path)['pos']))
 
-    read_group_ids = map(bam_path_to_read_group_id, sorted_bam_paths)
+    read_group_ids = [bam_path_to_read_group_id(s.output_bam_path2) for s in sorted_samples_to_combine]
     read_groups = [{'ID': read_group_id, "SM": 0} for read_group_id in read_group_ids]
 
-    #ibam_paths = []
     obam = None
-    for reassembled_bam_path in reassembled_bam_paths:
+    for s in samples_to_combine:
         # try reading in the reassembled bam and adding it to the combined bam
         try:
-            ibam = pysam.AlignmentFile(os.path.join(base_dir, reassembled_bam_path), "rb")
+            ibam = pysam.AlignmentFile(os.path.join(base_dir, s.output_bam_path), "rb")
 
             if obam is None:
                 header = {
@@ -113,7 +103,7 @@ def generate_combined_bam(base_dir, reassembled_bam_paths, temp_combined_bam_pat
                 obam = pysam.AlignmentFile(temp_combined_bam_path, "wb", header=header)
 
             # iterate over the reads
-            rg_tag = (('RG', bam_path_to_read_group_id(reassembled_bam_path)), )
+            rg_tag = (('RG', bam_path_to_read_group_id(s.output_bam_path2)), )
             for r in ibam:
                 r.tags = rg_tag
                 obam.write(r)
@@ -121,7 +111,7 @@ def generate_combined_bam(base_dir, reassembled_bam_paths, temp_combined_bam_pat
             ibam.close()
 
         except (IOError, ValueError) as e:
-            logging.error("ERROR on file %s: %s", reassembled_bam_path, e)
+            logging.error("ERROR on file %s: %s", s.output_bam_path2, e)
             logging.error(traceback.format_exc())
     if obam is not None:
         obam.close()
@@ -170,7 +160,7 @@ def generate_sqlite_db(variants_to_process, temp_sqlite_db_path, sqlite_db_path)
             }
 
             # delete readviz_bam_paths as they're no longer relevant because the data from these is being combined into one bam file
-            print("INSERTING " + str(d))
+            #print("INSERTING " + str(d))
             t.insert(**d).execute()
     sqlite_db.close()
 
@@ -204,12 +194,18 @@ def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
     sqlite_db_path = combined_bam_path.replace(".bam", ".db")
 
     # create iterator over variants in this bin
-    variants_to_process = [v for v in peewee.RawQuery(Variant,  (
-        "select * from variant where chrom='%s' and pos %%%% 1000 = %s"
-    ) % (chrom, position_hash)).execute()]
-
+    
+    #variants_to_process = [v for v in Sample._meta.database.execute_sql(("select chrom, pos, ref, alt, het_or_hom_or_hemi, count(*) as total_samples from %s "
+    #    "where chrom='%s' and pos_mod_1000=%s group by chrom, pos, ref, alt, het_or_hom_or_hemi") % (Sample._meta.db_table, chrom, position_hash)).dicts()]
+    variants_to_process = [v for v in 
+        Sample.select(
+            Sample.chrom, Sample.pos, Sample.ref, Sample.alt, Sample.het_or_hom_or_hemi, 
+            peewee.fn.COUNT(Sample.id).alias('n_expected_samples')
+        ).where(Sample.chrom == chrom, Sample.pos_mod_1000 == position_hash
+        ).group_by(Sample.chrom, Sample.pos, Sample.ref, Sample.alt, Sample.het_or_hom_or_hemi).execute()]
+    
     # choose the samples to combine, and get their reassembled bam paths
-    all_chosen_bam_paths_in_db = choose_samples_to_combine(variants_to_process)
+    all_samples = get_all_samples_to_combine(variants_to_process)
 
     # check if combine_bam output files already exist on disk, and skip if yes
     if not force and os.path.isfile(combined_bam_path) and os.path.isfile(sqlite_db_path):
@@ -217,30 +213,32 @@ def combine_bams(output_dir, temp_dir, chrom, position_hash, force=False):
             ibam = pysam.AlignmentFile(combined_bam_path, "rb")
             num_read_groups = len(ibam.header['RG'])
             ibam.close()
-            if num_read_groups == len(all_chosen_bam_paths_in_db):
+            if num_read_groups == len(all_samples):
                 logging.info("%s found on disk. size=%s read groups. Skipping..." % (combined_bam_path, num_read_groups))
                 return
+            else:
+                logging.info("ERROR: %s found on disk but num_read_groups (%s) != len(all_samples) (%s)" % (combined_bam_path, num_read_groups, len(all_samples)))
         except (IOError, ValueError) as e:
             logging.warning("WARNING: couldn't read combined file %s: %s", combined_bam_path, e)
             logging.warning(traceback.format_exc())
             logging.warning("Will regenerate it..")
 
-    # check that all_chosen_bam_paths_in_db exist on disk
+    # check that all_samples exist on disk
     all_available_bam_paths_on_disk = set(glob.glob(os.path.join(output_dir, chrom, hash_dir, 'chr*.bam')))
     all_available_bam_paths_on_disk = set(map(lambda p: p.replace(output_dir, '').strip('/'), list(all_available_bam_paths_on_disk)))
 
-    all_chosen_bam_paths_on_disk = all_available_bam_paths_on_disk & all_chosen_bam_paths_in_db
-
-    if len(all_chosen_bam_paths_on_disk) < len(all_chosen_bam_paths_in_db):
-        logging.info("ERROR: found only %s out of %s reassembled bams on disk in %s/%s/%s" % (
-            len(all_chosen_bam_paths_on_disk), len(all_chosen_bam_paths_in_db), output_dir, chrom, hash_dir))
+    all_samples_with_bam_paths_on_disk = [s for s in all_samples if s.output_bam_path in all_available_bam_paths_on_disk]
+    if len(all_samples_with_bam_paths_on_disk) < len(all_samples):
+        logging.info("ERROR: found only %s out of %s reassembled bams on disk in %s/%s/%s. Missing bams: %s" % (
+            len(all_samples_with_bam_paths_on_disk), len(all_samples), output_dir, chrom, hash_dir, 
+            ", ".join([s.output_bam_path for s in all_samples if s.output_bam_path not in all_available_bam_paths_on_disk])))
     else:
         logging.info("all %s out of %s reassembled bams found on disk in %s/%s/%s" % (
-            len(all_chosen_bam_paths_on_disk), len(all_chosen_bam_paths_in_db), output_dir, chrom, hash_dir))
+            len(all_samples_with_bam_paths_on_disk), len(all_samples), output_dir, chrom, hash_dir))
 
-    if len(all_chosen_bam_paths_on_disk) > 0:
-        generate_combined_bam(base_dir=output_dir, reassembled_bam_paths=list(map(str, all_chosen_bam_paths_on_disk)),
-                              temp_combined_bam_path=temp_combined_bam_path, combined_bam_path=combined_bam_path)
+    if len(all_samples_with_bam_paths_on_disk) > 0:
+        generate_combined_bam(base_dir=output_dir, samples_to_combine=all_samples_with_bam_paths_on_disk,
+            temp_combined_bam_path=temp_combined_bam_path, combined_bam_path=combined_bam_path)
 
     # create a combined_chr<chrom>_<hash>.db sqlite db where the website code can look up the number of expected and
     # available readviz tracks for each variant in this bin

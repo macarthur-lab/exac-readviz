@@ -4,6 +4,7 @@ recover from various kinds of transient errors fixable errors
 such as cluster filesystem problems, some previously-generated files being deleted, etc.
 """
 import os
+import sys
 from mysql.connector import MySQLConnection
 from utils.constants import DB_HOST, DB_PORT, DB_USER
 
@@ -300,7 +301,7 @@ if reset_unfinished_intervals_in_finished_chroms:
     
 if reset_intervals_that_contain_unfinished_variants:
     print("=== reset_intervals_that_contain_unfinished_variants ===")
-    for current_chrom in ALL_CHROMS:
+    for current_chrom in FINISHED_CHROMS:
         c = run_query("select chrom, pos from variant as v where chrom='%(current_chrom)s' and v.finished=0 order by pos asc" % locals()) 
         all_unfinished_variants = c.fetchall()
 
@@ -314,8 +315,12 @@ if reset_intervals_that_contain_unfinished_variants:
                 for i in all_intervals[chrom]:
                     if i[1] <= pos and pos <= i[2]:
                         current_interval = i
-                        if i[4] > 0:
+                        sys.stdout.write("Found matching interval %s for variant: %s" % (i, "%s:%s" % (chrom, pos)))
+                        if i[3] > 0 or i[4] > 0:
                             unfinished_intervals.add(i)
+                            sys.stdout.write(". Will reset it..\n")
+                        else:
+                            sys.stdout.write(". It's already marked as not started.\n")
                             #print("%s: %s" % (len(unfinished_intervals), i))
                         #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
                         break
@@ -344,7 +349,7 @@ if reset_intervals_that_contain_unfinished_variants:
 
 if reset_samples_with_transient_error:
         run_query(("update sample set started=0, started_time=NULL, finished=0, finished_time=NULL, hc_succeeded=0, hc_error_text=NULL, hc_error_code=NULL, comments=NULL "
-                   "where hc_error_code >= 2000 and hc_error_code < 3000") % locals())
+                   "where hc_error_code >= 2000 and hc_error_code < 3000 and chrom in %(FINISHED_CHROMS_STRING)s") % locals())
 
 if reset_unfinished_samples_in_finished_chroms:
     for chrom in FINISHED_CHROMS:
@@ -368,7 +373,8 @@ if reset_intervals_that_contain_unfinished_samples:
                 for i in all_intervals[chrom]:
                     if i[1] <= pos and pos <= i[2]:
                         current_interval = i
-                        if i[4] > 0:
+                        sys.stdout.write("Found matching interval %s for variant: %s" % (i, "%s:%s" % (chrom, pos)))
+                        if not (i[3] == 0 and i[4] == 0):  # reset intervals that are not started or not finished
                             unfinished_intervals.add(i)
                             print("%s: %s" % (len(unfinished_intervals), i))
                         #print("%(chrom)s %(pos)s is in interval %(i)s" % locals())
