@@ -136,7 +136,7 @@ def generate_combined_bam(base_dir, reassembled_bam_paths, temp_combined_bam_pat
     run("rm %(temp_combined_bam_path)s" % locals())
     
     bai_path = combined_bam_path.replace(".bam", ".bai")
-    run("mv %(bai_path)s %(combined_bam_path)s.bai" % locals())
+    run("cp %(bai_path)s %(combined_bam_path)s.bai" % locals())  # copy the .bai file to .bam.bai since this is what IGV.js looks for
 
 
 def generate_sqlite_db(variants_to_process, temp_sqlite_db_path, sqlite_db_path):
