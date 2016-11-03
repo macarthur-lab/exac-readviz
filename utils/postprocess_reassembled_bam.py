@@ -68,73 +68,33 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
 
     # artificial haplotype coords are half-open (eg. (start=83, end=93) has length 10)
     union_of_artificial_haplotypes_that_overlap_variant = (1e9, 0)  # union of genomic intervals spanned by artificial haplotypes that overlap the variant
-    artificial_haplotypes_that_dont_overlap_variant = {}  # maps each artificial haplotype id (eg. HC tag value) to the interval spanned by this artificial haplotype: (r.reference_start, r.reference_end)
 
     # iterate over the reads
-    raw_reads = {}  # maps each artificial haplotype id (eg. HC tag value) to the list of reads assigned to this haplotype (eg. that have this id in their HC tag)
+    raw_reads = []  # maps each artificial haplotype id (eg. HC tag value) to the list of reads assigned to this haplotype (eg. that have this id in their HC tag)
     ibam = pysam.AlignmentFile(input_bam_path, "rb")
-
     for r in ibam:
         tags = dict(r.tags)
-        if 'HC' not in tags:
-            continue      # skip reads without an 'HC' tag - they don't count towards the AD so are already getting ignored in some ways
-
-        haplotype_id = tags['HC'] 
         if tags.get('RG') == "ArtificialHaplotype":
             # handle reads that are actually artificial haplotypes
             artificial_haplotype_counter += 1
+
             # check whether the artificial haplotype overlaps the variant
-            if r.reference_start >= variant_end or r.reference_end <= variant_start:
-                # there's no overlap
-                artificial_haplotypes_that_dont_overlap_variant[haplotype_id] = (r.reference_start, r.reference_end)
-            else:
+            if r.reference_start <= variant_end and r.reference_end >= variant_start:
                 union_of_artificial_haplotypes_that_overlap_variant = interval_union(
-                        (r.reference_start, r.reference_end),
-                        union_of_artificial_haplotypes_that_overlap_variant)
-
+                    (r.reference_start, r.reference_end),
+                    union_of_artificial_haplotypes_that_overlap_variant)
         else:
-            # this is a regular read - save it, hashed by the haplotype_id of the haplotype that it was mapped to.
-            if haplotype_id not in raw_reads:
-                raw_reads[haplotype_id] = []
-            raw_reads[haplotype_id].append(r)
+            # this is a regular read, not an artificial haplotype
+            raw_reads.append(r)
 
-    artificial_haplotypes_deleted_counter = 0
     if not raw_reads:
         is_bam_empty = True
         return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
-
-    # For each artificial haplotype that doesn't overlap the variant, check if it overlaps any of the artificial
-    # haplotypes that do overlap the variant. If it does then discard all raw reads that map to it since these reads
-    # cause bumps in the coverage plot due to double-counting of the overlapping reads.
-    for haplotype_id, artificial_haplotype_that_doesnt_overlap_variant in artificial_haplotypes_that_dont_overlap_variant.items():
-        if haplotype_id not in raw_reads:
-            continue # skip haplotypes that have no reads mapped to them (this does happen)
-
-        if do_intervals_intersect(
-                artificial_haplotype_that_doesnt_overlap_variant,
-                union_of_artificial_haplotypes_that_overlap_variant):
-            # intersection found, so delete all reads mapping to this haplotype that doesn't overlap the variant
-            artificial_haplotypes_deleted_counter += 1
-            del raw_reads[haplotype_id]
-
-    # sanity check
-    if not raw_reads:
-        is_bam_empty = True
-        return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
-
-        #assert artificial_haplotype_counter > 0, \
-        #    "Expected HaplotypeCaller to add at least one record with " \
-        #    "RG == 'ArtificialHaplotype'. " \
-        #    "%(input_bam_path)s => %(output_bam_path)s" % locals()
-
-    if artificial_haplotypes_deleted_counter > 0:
-        logging.info(("post-processing: discarded %(artificial_haplotypes_deleted_counter)d out of "
-                    "%(artificial_haplotype_counter)d artificial haplotypes") % locals())
 
     # write out the bam
     reference_sequences = []
     for reference_id in range(len(ibam.header['SQ'])):
-        d = {}
+        d = {}  # dcitionary of ref. sequences
         reference_sequences.append(d)
         for key, value in ibam.header['SQ'][reference_id].items():
             if key in ["SN", "LN"]:
@@ -147,29 +107,32 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
 
     is_bam_empty = True
     obam = pysam.AlignmentFile(output_bam_path, "wb", header=header)
-    for hc, reads in raw_reads.items():
-        for r in reads:
-            # copy info from r to s
-            s = pysam.AlignedSegment()
-            s.query_name = read_name_hash(r.query_name)
-            s.query_sequence = r.query_sequence
-            s.flag = r.flag
-            s.reference_id = r.reference_id  # since the bam should only have reads from one chromosome, there will always be just 1 chromosome entry in the header, and so this reference_id can always be 0.
-            s.reference_start = r.reference_start
-            s.mapping_quality = r.mapping_quality
-            s.cigar = r.cigar
-            s.next_reference_id = r.next_reference_id
-            s.next_reference_start = r.next_reference_start
-            s.template_length = r.template_length
-            s.query_qualities = r.query_qualities
+    for r in raw_reads:
+        if not (r.reference_start >= union_of_artificial_haplotypes_that_overlap_variant[0] and \
+                r.reference_end <= union_of_artificial_haplotypes_that_overlap_variant[1]):
+            continue  # the read must be fully contained within the haplotype interval to avoid the issue with coverage bumps
 
-            obam.write(s)
-            is_bam_empty = False
+        # copy info from r to s
+        s = pysam.AlignedSegment()
+        s.query_name = read_name_hash(r.query_name)
+        s.query_sequence = r.query_sequence
+        s.flag = r.flag
+        s.reference_id = r.reference_id  # since the bam should only have reads from one chromosome, there will always be just 1 reference entry in the output bam header
+        s.reference_start = r.reference_start
+        s.mapping_quality = r.mapping_quality
+        s.cigar = r.cigar
+        s.next_reference_id = r.next_reference_id
+        s.next_reference_start = r.next_reference_start
+        s.template_length = r.template_length
+        s.query_qualities = r.query_qualities
+        
+        obam.write(s)
+        is_bam_empty = False
 
     if obam is not None:
         obam.close()
 
-    return (is_bam_empty, artificial_haplotype_counter, artificial_haplotypes_deleted_counter)
+    return (is_bam_empty, artificial_haplotype_counter)
 
 
 if __name__ == "__main__":
