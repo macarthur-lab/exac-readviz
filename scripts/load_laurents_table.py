@@ -1,8 +1,12 @@
 import sys
 from tqdm import tqdm
 import gzip
-from utils.database import Variant, Sample
+from collections import defaultdict
+from utils.database import Sample
 from utils.constants import MAX_ALLELE_SIZE
+from utils.minimal_representation import get_minimal_representation
+from utils.exac_info_table import compute_latest_bam_path
+from utils.file_utils import does_file_exist
 
 """
 Example:
@@ -11,71 +15,88 @@ Example:
 
 BUFFER_SIZE=1250
 
-is_sample_id_on_fargo = {}
-kristens_file = open("/humgen/atgu1/fs03/kristen/exac/metadata/status_fargo_all.txt")
-header = next(kristens_file)  
-print(header)
-for line in kristens_file:
-    fields = line.strip('\n').split('\t')
-    sample_id = fields[1]
-    is_sample_id_on_fargo[sample_id.lower()] = 1 if fields[-1].lower() == 'fargo' else 0
-    #print(sample_id, fields[-1].lower(), is_sample_id_on_fargo[sample_id])
+class SampleGenomes(Sample):
+    class Meta:
+        db_table = 'sample_genomes'
 
-header = ['chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'sample_id', 'original_bam_path', 'original_gvcf_path', 'sample_i', 'gq', 'dp']
+class SampleExomes(Sample):
+    class Meta:
+        db_table = 'sample_exomes'
 
-filename = sys.argv[1]
+#filename = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/gnomad.readviz.txt.bgz"
+#exome_or_genome = "G"
+#Sample = SampleGenomes
+
+filename = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/exacv2.readviz.txt.bgz"
+exome_or_genome = "E"
+Sample = SampleExomes
+
 print("Loading %s" % filename)
+print("Table name: " + Sample._meta.db_table)
+#sys.exit(0)
 
-seen_variants = set()
-variant_insert_buffer = []
+header = ['chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'sample_id', 'original_bam_path', 'original_gvcf_path', 
+          'project_id', 'project_description', 'sex', 'population', 'sample_i', 'gq', 'dp', 'dp_ref', 'dp_alt']
+
+
+file_exists = {}
 sample_insert_buffer = []
-for line in tqdm(gzip.open(filename), unit='row'):
+counter = defaultdict(int)
+f = gzip.open(filename)
+print("Skipping header line: " + next(f))
+for line in tqdm(f, unit='row'):
     line = line.strip('\n')
     if not line:
         continue
 
+    counter['total'] += 1
+
     fields = line.split('\t')
-    previous_variant = None
-    
+
     try:
         assert len(header) == len(fields), "len(header) != len(fields)"
 
         row = dict(zip(header, fields))
+        row['exome_or_genome'] = exome_or_genome
+
+        int_pos = int(row['pos'])
+        int_pos, row['ref'], row['alt'] = get_minimal_representation(int_pos, row['ref'], row['alt'])
         row['ref'] = row['ref'][:MAX_ALLELE_SIZE]
         row['alt'] = row['alt'][:MAX_ALLELE_SIZE]
         row['variant_id'] = "%s-%s-%s-%s" % ( row['chrom'], row['pos'], row['ref'], row['alt']) 
-        row['priority'] = 0 if is_sample_id_on_fargo.get(row['sample_id'].lower()) else 1
-        
-        variant_uniq_id = row['variant_id'] + row['het_or_hom_or_hemi']
-        if variant_uniq_id not in seen_variants:
-            variant_insert_buffer.append({k: row[k] for k in ['chrom', 'pos', 'ref', 'alt', 'het_or_hom_or_hemi', 'variant_id']})
-            seen_variants.add(variant_uniq_id)
+
+        if len(row['ref']) > 1 and len(row['alt']) > 1:
+            print("ERROR: couldn't min-rep " + row['variant_id'])
+
+
+        row['priority'] = 0 
+        row['original_bam_path'] = compute_latest_bam_path(row['original_bam_path'])
+
+        if row['original_bam_path'] not in file_exists:
+            file_exists[ row['original_bam_path'] ] = int(does_file_exist(row['original_bam_path']))
+            counter['files_that_exist'] = sum(file_exists.values())
+            counter['total_files'] = len(file_exists)
+            counter['files_that_are_missing'] = counter['total_files'] - counter['files_that_exist']
+            if not  file_exists[ row['original_bam_path'] ]:
+                print("\nMissing bam: " + row['original_bam_path'])
+            
+        row['pos'] = str(int_pos)
+        row['pos_mod_1000'] = int_pos % 1000        
+        row['sex'] = row['sex'][0].upper()
 
         # sample
         assert int(row['dp']) >= 10, "int(row['dp']) < 10"
         assert int(row['gq']) >= 20, "int(row['gq']) < 20"
         
-        del row['dp']
-        del row['gq']
-
         sample_insert_buffer.append(row)
-
         if len(sample_insert_buffer) > BUFFER_SIZE:
-            #with Sample._meta.database.atomic():
-            Sample.insert_many(sample_insert_buffer).execute()
+            sql = Sample.insert_many(sample_insert_buffer)
+            sql.execute()
             sample_insert_buffer = []
-
-        if len(variant_insert_buffer) > BUFFER_SIZE:
-            #with Variant._meta.database.atomic():
-            Variant.insert_many(variant_insert_buffer).execute()
-            variant_insert_buffer = []
-
+            print("\n" + str(dict(counter)))
 
     except Exception as e:
         print("ERROR: %s on line %s" % (e, fields)) 
         raise
 
-Variant.insert_many(variant_insert_buffer).execute()
 Sample.insert_many(sample_insert_buffer).execute()
-    
-
