@@ -110,8 +110,17 @@ class Sample(_SharedVariantFields):
     hc_n_artificial_haplotypes = peewee.IntegerField(default=None, index=True, null=True)
     hc_n_artificial_haplotypes_deleted = peewee.IntegerField(default=None, index=True, null=True)
 
-    #screenshot_started = peewee.BooleanField(default=0)
-    #screenshot_finished = peewee.BooleanField(default=0)
+    exome_or_genome = peewee.CharField(index=True, max_length=1, null=True)
+    project_id = peewee.CharField(index=True, max_length=100, null=True)
+    project_description = peewee.CharField(index=True, max_length=100, null=True)
+    sex = peewee.CharField(index=True, max_length=1, null=True)
+    population = peewee.CharField(index=True, max_length=3, null=True)
+
+    gq = peewee.IntegerField(null=True)
+    dp = peewee.IntegerField(null=True)
+    dp_ref = peewee.IntegerField(null=True)
+    dp_alt = peewee.IntegerField(null=True)
+    
 
     class Meta:
         indexes = (
