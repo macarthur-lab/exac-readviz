@@ -3,11 +3,13 @@ Utility module for parsing the exac info table into memory.
 
 After this module is imported, the following global vars can be used to access
 the data:
+ TCGA_SAMPLE_ID_TO_BAM_PATH
+ TCGA_SAMPLE_ID_TO_GVCF_PATH
 
  EXAC_SAMPLE_ID_TO_BAM_PATH
  EXAC_SAMPLE_ID_TO_GVCF_PATH
  EXAC_SAMPLE_ID_TO_INCLUDE_STATUS
-
+ 
 """
 
 import logging
@@ -106,7 +108,7 @@ try:
 except Exception, e:
     print("WARNING: " + str(e))
 
-
+TCGA_SAMPLE_ID_TO_BAM_PATH = TCGA_SAMPLE_ID_TO_GVCF_PATH = {}
 try:
     # Parse the new TCGA bam paths
     with open(TCGA_NEW_BAM_PATHS) as f:
@@ -114,23 +116,35 @@ try:
             fields = line.strip('\n').split('\t')
             tcga_sample_id = fields[0]
 
-            assert tcga_sample_id in EXAC_SAMPLE_ID_TO_GVCF_PATH
-            assert tcga_sample_id in EXAC_SAMPLE_ID_TO_BAM_PATH
-
             tcga_gvcf_path = fields[5]
             tcga_bam_path = fields[-1]
+
 
             #if not os.path.isfile(tcga_gvcf_path): print("ERROR: vcf file not found: " + tcga_gvcf_path)
             #if not os.path.isfile(tcga_bam_path): print("ERROR: bam file not found: " + tcga_gvcf_path)
 
-            assert EXAC_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] == tcga_gvcf_path
-            #print('---\n%s\n%s' % (EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id], tcga_bam_path))
-            
-            EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = tcga_bam_path
+            TCGA_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = tcga_bam_path
+            TCGA_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] = tcga_gvcf_path
 except Exception, e:
     print("WARNING: " + str(e))
 
     
+try:
+    for tcga_sample_id in TCGA_SAMPLE_ID_TO_BAM_PATH:
+        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_BAM_PATH
+        assert tcga_sample_id in EXAC_SAMPLE_ID_TO_GVCF_PATH
+
+        EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id] = TCGA_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id]
+        assert EXAC_SAMPLE_ID_TO_GVCF_PATH[tcga_sample_id] == tcga_gvcf_path
+
+        print('---\n%s\n%s' % (EXAC_SAMPLE_ID_TO_BAM_PATH[tcga_sample_id], tcga_bam_path))
+
+except Exception, e:
+    print("WARNING: " + str(e))
+            
+
+BAM_PATH_REGEXP = re.compile("/v[0-9]{1,2}/")
+
 def compute_latest_bam_path(bam_path):
     """Compute current bam path"""
 
@@ -145,7 +159,7 @@ def compute_latest_bam_path(bam_path):
     elif "CONT_" in bam_path:
         bam_path = bam_path.replace("CONT_", "CONT")
 
-    bam_path = re.sub("/v[0-9]{1,2}/", "/current/", bam_path)  # get latest version of the bam
+    bam_path = BAM_PATH_REGEXP.sub("/current/", bam_path)  # get latest version of the bam
 
     return bam_path
 
