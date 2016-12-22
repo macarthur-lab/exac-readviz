@@ -70,7 +70,7 @@ def postprocess_bam(input_bam_path, output_bam_path, chrom, pos, ref, alt):
     union_of_artificial_haplotypes_that_overlap_variant = (1e9, 0)  # union of genomic intervals spanned by artificial haplotypes that overlap the variant
 
     # iterate over the reads
-    raw_reads = []  # maps each artificial haplotype id (eg. HC tag value) to the list of reads assigned to this haplotype (eg. that have this id in their HC tag)
+    raw_reads = []  # list of all reads that aren't artificial haplotypes
     ibam = pysam.AlignmentFile(input_bam_path, "rb")
     for r in ibam:
         tags = dict(r.tags)
