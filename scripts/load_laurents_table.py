@@ -27,11 +27,16 @@ class SampleExomes(Sample):
 
 #filename = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/gnomad.readviz.txt.bgz"
 #filename = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/gnomad.coding.txt.gz"
-filenames = glob.glob("/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/gnomad.coding.[0-9X]*.txt.gz")
+
+filenames = glob.glob("/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/genomes/genomes.coding.[0-9X]*.txt.gz")
+header_file = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/genomes/genomes.coding.chrom.txt.gz"
 exome_or_genome = "G"
 Sample = SampleGenomes
 
+
 #filename = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/exacv2.readviz.txt.bgz"
+#filenames = glob.glob("/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/exomes/exomes.coding.[0-9XY]*.txt")
+#header_file = "/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/exomes/exomes.coding.chrom.txt.gz"
 #exome_or_genome = "E"
 #Sample = SampleExomes
 
@@ -62,7 +67,7 @@ for filename in filenames:
     counter = defaultdict(int)
     f = gzip.open(filename) if filename.endswith('.gz') else open(filename)
 
-    header_f = gzip.open("/humgen/atgu1/fs03/weisburd/exac_readviz_data_v2/laurents_tables_v2/gnomad.coding.chrom.txt.gz")
+    header_f = gzip.open(header_file)
     header = next(header_f).strip('\n').replace(
         '\tsid\t', '\tsample_id\t').replace(
             '\tbam\t', '\toriginal_bam_path\t').replace(
