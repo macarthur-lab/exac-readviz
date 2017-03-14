@@ -20,6 +20,7 @@ configargparse.initArgumentParser(
 
 import collections
 import datetime
+import os
 import pysam
 import random
 import signal
@@ -115,11 +116,14 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
         if sr.sample_i >= MAX_SAMPLES_TO_SHOW_PER_VARIANT + BACKUP_SAMPLES_IN_CASE_OF_ERRORS:
             logging.info("%s-%s-%s-%s %s - sample_i too large. Skipping: %s" % (
                 sr.chrom, sr.pos, sr.ref, sr.alt, sr.het_or_hom_or_hemi, sr.sample_i))
-            sr.delete_instance()
+            #sr.delete_instance()
             continue
 
         # make sure the variant is normalized
         if len(sr.ref) > 1 and len(sr.alt) > 1:
+            logging.info("%s-%s-%s-%s %s #%s - normalizing variant" % (
+                sr.chrom, sr.pos, sr.ref, sr.alt, sr.het_or_hom_or_hemi, sr.sample_i))
+
             #variant_records = list(
             #    Variant.select().where((Variant.chrom == sr.chrom) & (Variant.pos == sr.pos) & (Variant.ref == sr.ref) & (Variant.alt == sr.alt)))
 
@@ -145,7 +149,6 @@ def main(sample_iterator, bam_output_dir, exit_after_minutes=None):
                 sr.hc_error_text = "not needed"
                 sr.save()
                 continue
-
 
         try:
             run_haplotype_caller(
@@ -232,10 +235,15 @@ def create_sample_record_iterator(chrom=None, start_pos=None, end_pos=None):
 
 
 
+
+
 if __name__ == "__main__":
     p = configargparse.getArgumentParser()
     p.add("--bam-output-dir", help="Where to output HC-reassembled bams", default=BAM_OUTPUT_DIR)
     p.add("--chrom", help="If specified, only process this chromosome", action="append")
+    p_exome_or_genome = p.add_mutually_exclusive_group()
+    p_exome_or_genome.add_argument("--exomes", action="store_true", help="Process exome samples")
+    p_exome_or_genome.add_argument("--genomes", action="store_true", help="Process genome samples")
     p.add("--start-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int)
     p.add("--end-pos", help="If specified, only process region in this interval (1-based inclusive coordinates)", type=int, default=10**10)
 
@@ -253,6 +261,9 @@ if __name__ == "__main__":
     for key in dir(utils.constants):
         if not key.startswith("_"):
             logging.info("%s=%s" % (key, utils.constants.__dict__[key]))
+
+
+    logging.info("Running with database table: " + Sample._meta.db_table)
 
     if args.start_pos:
         args.start_pos = args.start_pos - 1  # because start_pos is 1-based inclusive and fetch(..) doesn't include the start_pos
@@ -279,10 +290,23 @@ if __name__ == "__main__":
         logging.info("chrom args: %s" % str(args.chrom))
         chromosomes = args.chrom
 
-    for chrom in chromosomes:
-        logging.info("Processing chrom: %s" % chrom)
-        sample_record_iterator = create_sample_record_iterator(chrom=chrom, start_pos=args.start_pos, end_pos=args.end_pos)
-        main(sample_iterator=sample_record_iterator, bam_output_dir=args.bam_output_dir, exit_after_minutes=args.exit_after)
+    if args.exomes:
+        sample_table_names = ['sample_exomes']
+    elif args.genomes:
+        sample_table_names = ['sample_genomes']
+    else:
+        #import random
+        #random.seed()
+        #Sample._meta.db_table = 'sample_exomes' if random.randint(0, 1) else 'sample_genomes'
+        sample_table_names = ['sample_exomes', 'sample_genomes']
+
+
+    for sample_table_name in sample_table_names:
+        Sample._meta.db_table = sample_table_name
+        for chrom in chromosomes:
+            logging.info("Processing chrom: %s" % chrom)
+            sample_record_iterator = create_sample_record_iterator(chrom=chrom, start_pos=args.start_pos, end_pos=args.end_pos)
+            main(sample_iterator=sample_record_iterator, bam_output_dir=args.bam_output_dir, exit_after_minutes=args.exit_after)
 
     if profiling_enabled:
         profiler.stop()
