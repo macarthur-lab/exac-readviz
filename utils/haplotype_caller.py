@@ -99,20 +99,43 @@ def run_haplotype_caller(
 
         return (False, None)
 
-    # look up the exac calling interval that spans this variant, as well as its 2 adjacent intervals on either side
-    left_i, i, right_i = get_adjacent_calling_intervals(
-                            chrom,
-                            pos,
-                            n_left=INCLUDE_N_ADJACENT_CALLING_REGIONS,
-                            n_right=INCLUDE_N_ADJACENT_CALLING_REGIONS)
+    # first, output to temp files to avoid partially-finished files if HC crashes or is killed
+    exome_or_genome_dir = None
+    if sr.exome_or_genome == "E":
+        all_bam_output_dir = os.path.join(all_bam_output_dir, "exomes")
 
-    assert chrom == i.chrom, "%s chrom doesn't match %s" % (str(i), chrom)
+        # look up the exac calling interval that spans this variant, as well as its 2 adjacent intervals on either side
+        left_i, i, right_i = get_adjacent_calling_intervals(
+            chrom,
+            pos,
+            n_left=INCLUDE_N_ADJACENT_CALLING_REGIONS,
+            n_right=INCLUDE_N_ADJACENT_CALLING_REGIONS)
+        
+        assert chrom == i.chrom, "%s chrom doesn't match %s" % (str(i), chrom)
 
-    sr.calling_interval_start = i.start
-    sr.calling_interval_end = i.end
+        sr.calling_interval_start = i.start
+        sr.calling_interval_end = i.end
+
+        dash_L_intervals = list(itertools.chain.from_iterable(
+            [('-L', str(interval)) for interval in left_i + [i] + right_i]))
+
+    elif sr.exome_or_genome == "G":
+        all_bam_output_dir = os.path.join(all_bam_output_dir, "genomes")
+
+        sr.calling_interval_start = pos - 150
+        sr.calling_interval_end = pos + 150
+
+        dash_L_intervals = ['-L', "%s:%s-%s" % (
+            chrom, 
+            sr.calling_interval_start, 
+            sr.calling_interval_end)]
+        
+
+    else:
+        raise ValueError("Unexpected sr.exome_or_genome value: %s. %s" % (sr.exome_or_genome, sr.__dict__))
+    
     sr.original_gvcf_path = str(original_gvcf_path)
 
-    # first, output to temp files to avoid partially-finished files if HC crashes or is killed
     relative_output_dir = os.path.dirname(output_bam_path)
     temp_output_bam_path = os.path.join(all_bam_output_dir, relative_output_dir, "tmp." + os.path.basename(output_bam_path))
 
@@ -126,8 +149,6 @@ def run_haplotype_caller(
         logging.debug("creating directory: %s" % absolute_output_dir)
         run("mkdir -m 0777 -p %(absolute_output_dir)s" % locals()) 
 
-    dash_L_intervals = list(itertools.chain.from_iterable(
-        [('-L', str(interval)) for interval in left_i + [i] + right_i]))
 
     # see https://www.broadinstitute.org/gatk/guide/article?id=5484  for details on using -bamout
     gatk_cmd = [
@@ -244,7 +265,7 @@ def run_haplotype_caller(
     (is_reassembled_bam_empty, sr.hc_n_artificial_haplotypes) = retry_if_IOError(
         postprocess_bam, temp_output_bam_path, final_output_bam_path, chrom, pos, ref, alt)
 
-    run("rm -f %s" % temp_output_bam_path)
+    run("rm -f %s" % temp_output_bam_path)   
     run("chmod 0666 %s" % final_output_bam_path)  # in case different users run this script
 
     if is_reassembled_bam_empty:
