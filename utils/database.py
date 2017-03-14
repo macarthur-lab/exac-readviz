@@ -1,14 +1,14 @@
 import logging
 import peewee
 import playhouse.pool
-from utils.constants import MAX_ALLELE_SIZE, MAX_VCF_SAMPLE_ID_SIZE, DB_HOST, DB_PORT, DB_USER
+from utils.constants import MAX_ALLELE_SIZE, MAX_VCF_SAMPLE_ID_SIZE, DB_HOST, DB_PORT, DB_USER, DB_PASS
 
 # disable peewee warning messages
 logging.getLogger('peewee').setLevel(logging.ERROR)
 
 # define database
 _readviz_db = playhouse.pool.PooledMySQLDatabase(
-    'exac_readviz', user=DB_USER, host=DB_HOST, port=DB_PORT)
+    'exac_readviz', user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
 
 #_readviz_db = peewee.SqliteDatabase('exac_readviz.db', autocommit=False)
 #_readviz_db = peewee.SqliteDatabase(':memory:')
