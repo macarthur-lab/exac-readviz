@@ -5,12 +5,13 @@ from utils.file_utils import does_file_exist
 
 DB_HOST = 'exac-dev'
 DB_PORT = 3307 
-DB_USER = 'root'
+DB_USER = 'readwrite'
+DB_PASS = 'data'
 
 DATA_DIR_PREFIX = '/humgen/atgu1/fs03/weisburd/exac_readviz_scripts_data' 
 BIN_DIR_PREFIX = os.path.join(DATA_DIR_PREFIX, 'bin') 
 #BAM_OUTPUT_DIR = "/broad/hptmp/exac_readviz_backend/"
-BAM_OUTPUT_DIR = "/humgen/atgu1/fs03/weisburd/exac_readviz_output_v2/"
+BAM_OUTPUT_DIR = "/humgen/atgu1/fs03/weisburd/gnomad_readviz_output/"
 
 EXIT_UGER_JOB_AFTER_N_HOURS = 0.5    # if running a processing loop in a UGER job, exit after this many hours to avoid getting killed by the short queue time limit.
 
